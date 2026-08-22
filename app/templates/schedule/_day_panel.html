@@ -1,0 +1,20 @@
+{% from "partials/icons.html" import icon_edit, icon_trash, icon_plus %}
+<div class="day-panel">
+    <h2>{{ event_date.isoformat() }}の予定</h2>
+    <ul class="event-list">
+        {% for event in events %}
+        <li>
+            {% if event.start_time %}{{ event.start_time.strftime("%H:%M") }} {% endif %}
+            <strong>{{ event.title }}</strong>
+            {% if event.world_name %}({{ event.world_name }}){% endif %}
+            {% if event.source == "vrchat_calendar" %}<span class="text-muted">[VRChat取込]</span>{% endif %}
+            <button class="icon-btn" title="編集" hx-get="/schedule/events/{{ event.id }}/edit" hx-target="#event-form-area" hx-swap="innerHTML">{{ icon_edit(16) }}</button>
+            <button class="icon-btn" title="削除" hx-delete="/schedule/events/{{ event.id }}?event_date={{ event_date.isoformat() }}" hx-target="#day-panel" hx-swap="outerHTML" hx-confirm="この予定を削除しますか？">{{ icon_trash(16) }}</button>
+        </li>
+        {% else %}
+        <li class="placeholder">この日の予定はありません。</li>
+        {% endfor %}
+    </ul>
+    <button class="btn" hx-get="/schedule/events/new?event_date={{ event_date.isoformat() }}" hx-target="#event-form-area" hx-swap="innerHTML">{{ icon_plus(16) }} 予定を追加</button>
+    <div id="event-form-area"></div>
+</div>

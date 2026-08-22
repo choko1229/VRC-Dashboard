@@ -1,0 +1,30 @@
+{% from "partials/icons.html" import icon_chevron_left, icon_chevron_right %}
+<div class="month-nav">
+    <button class="icon-btn" title="前月" hx-get="/schedule/partials/month?year={{ prev_year }}&month={{ prev_month }}" hx-target="#calendar-month" hx-swap="innerHTML">{{ icon_chevron_left() }}</button>
+    <span class="month-label">{{ year }}年{{ month }}月</span>
+    <button class="icon-btn" title="次月" hx-get="/schedule/partials/month?year={{ next_year }}&month={{ next_month }}" hx-target="#calendar-month" hx-swap="innerHTML">{{ icon_chevron_right() }}</button>
+</div>
+<table class="month-grid">
+    <thead>
+        <tr>
+            <th>日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th>土</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for week in weeks %}
+        <tr>
+            {% for day in week %}
+            <td class="calendar-cell {% if day.month != month %}calendar-cell-outside{% endif %} {% if day == today %}calendar-cell-today{% endif %}"
+                hx-get="/schedule/partials/day/{{ day.isoformat() }}"
+                hx-target="#day-panel"
+                hx-swap="innerHTML">
+                <span class="calendar-day-number">{{ day.day }}</span>
+                {% for event in events_by_day.get(day, [])[:3] %}
+                <span class="calendar-event-chip">{{ event.title }}</span>
+                {% endfor %}
+            </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

@@ -1,0 +1,7 @@
+<ul class="excerpt-list">
+    {% for event in events %}
+    <li>{% if event.start_time %}{{ event.start_time.strftime("%H:%M") }} {% endif %}{{ event.title }}</li>
+    {% else %}
+    <li class="placeholder">今日の予定はありません。</li>
+    {% endfor %}
+</ul>

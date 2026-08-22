@@ -1,0 +1,23 @@
+<table class="month-grid">
+    <thead>
+        <tr>
+            {% for day in days %}
+            <th>{{ day.strftime("%m/%d") }}({{ ["日","月","火","水","木","金","土"][(day.weekday()+1) % 7] }})</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            {% for day in days %}
+            <td class="calendar-cell {% if day == today %}calendar-cell-today{% endif %}"
+                hx-get="/schedule/partials/day/{{ day.isoformat() }}"
+                hx-target="#day-panel"
+                hx-swap="innerHTML">
+                {% for event in events_by_day.get(day, []) %}
+                <span class="calendar-event-chip">{{ event.title }}</span>
+                {% endfor %}
+            </td>
+            {% endfor %}
+        </tr>
+    </tbody>
+</table>

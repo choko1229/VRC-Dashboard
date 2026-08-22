@@ -1,0 +1,15 @@
+<form class="event-form"
+      {% if event %}
+      hx-patch="/schedule/events/{{ event.id }}"
+      {% else %}
+      hx-post="/schedule/events"
+      {% endif %}
+      hx-target="#day-panel" hx-swap="outerHTML">
+    <input type="text" name="title" placeholder="タイトル（必須）" required value="{{ event.title if event else '' }}">
+    <input type="date" name="event_date" required value="{{ (event.event_date if event else event_date).isoformat() }}">
+    <input type="time" name="start_time" value="{{ event.start_time.strftime('%H:%M') if event and event.start_time else '' }}">
+    <input type="text" name="world_name" placeholder="ワールド名（任意）" value="{{ (event.world_name if event else '') or '' }}">
+    <input type="text" name="world_id" placeholder="ワールドID（任意）" value="{{ (event.world_id if event else '') or '' }}">
+    <textarea name="memo" placeholder="メモ（任意）">{{ (event.memo if event else '') or '' }}</textarea>
+    <button type="submit" class="btn">{{ "更新" if event else "追加" }}</button>
+</form>
