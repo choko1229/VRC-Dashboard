@@ -1,0 +1,21 @@
+<ul class="sidebar-friends-list">
+    {% for friend in friends %}
+    <li>
+        <a href="/friends/{{ friend.id }}" class="sidebar-friend-link">
+            {% if friend.current_avatar_thumbnail_url %}
+            <img src="{{ friend.current_avatar_thumbnail_url }}" class="sidebar-friend-thumb" alt="">
+            {% else %}
+            <span class="sidebar-friend-thumb sidebar-friend-thumb-placeholder"></span>
+            {% endif %}
+            <span class="sidebar-friend-text">
+                <span class="sidebar-friend-name">
+                    <span class="status-dot status-online"></span>{{ friend.display_name }}
+                </span>
+                <span class="sidebar-friend-world">{{ friend.current_world_name or "不明なワールド" }}</span>
+            </span>
+        </a>
+    </li>
+    {% else %}
+    <li class="placeholder">オンラインのフレンドはいません。</li>
+    {% endfor %}
+</ul>

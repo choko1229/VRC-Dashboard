@@ -9,13 +9,6 @@
 </header>
 
 <section class="dashboard-grid">
-    <article class="card theme-friends">
-        <h2>フレンド状況</h2>
-        <div hx-get="/partials/dashboard/friends-excerpt" hx-trigger="load, every 15s" hx-swap="innerHTML">
-            <p class="placeholder">読み込み中...</p>
-        </div>
-        <p><a href="/friends">フレンド一覧を見る</a> ｜ <a href="/settings/vrchat">VRChat連携設定</a></p>
-    </article>
     <article class="card theme-avatars">
         <h2>アバター準備状況</h2>
         <div hx-get="/partials/dashboard/avatar-summary" hx-trigger="load" hx-swap="innerHTML">

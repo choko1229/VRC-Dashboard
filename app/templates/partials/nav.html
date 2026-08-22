@@ -2,7 +2,7 @@
 {% if request.cookies.get("vrc_dashboard_session") %}
 {% set current_user = current_dashboard_user(request) %}
 <nav class="app-nav">
-    <a href="/" class="nav-logo app-heading">VRCダッシュボード</a>
+    <a href="/" class="nav-logo app-heading"><span class="nav-logo-text">VRCダッシュボード</span></a>
     <div class="nav-links">
         <a href="/" title="ダッシュボード" class="nav-link">{{ icon_home() }}<span>ホーム</span></a>
         <a href="/friends" title="フレンド" class="nav-link">{{ icon_users() }}<span>フレンド</span></a>

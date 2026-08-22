@@ -27,14 +27,15 @@ async def dashboard_home(
     return templates.TemplateResponse(request, "dashboard/home.html", {"user": user})
 
 
-@router.get("/partials/dashboard/friends-excerpt", response_class=HTMLResponse)
-async def friends_excerpt(request: Request, db: AsyncSession = Depends(get_db)) -> HTMLResponse:
+@router.get("/partials/friends-sidebar", response_class=HTMLResponse)
+async def friends_sidebar(request: Request, db: AsyncSession = Depends(get_db)) -> HTMLResponse:
+    """全ページ共通の右サイドバーに表示するオンラインフレンド一覧（partials/friends_sidebar.html）。"""
     result = await db.execute(
-        select(Friend).where(Friend.is_online.is_(True)).order_by(Friend.display_name).limit(8)
+        select(Friend).where(Friend.is_online.is_(True)).order_by(Friend.display_name).limit(30)
     )
     friends = result.scalars().all()
     return templates.TemplateResponse(
-        request, "dashboard/_friends_excerpt.html", {"friends": friends}
+        request, "partials/_friends_sidebar_list.html", {"friends": friends}
     )
 
 

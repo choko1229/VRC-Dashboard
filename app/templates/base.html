@@ -13,10 +13,12 @@
 </head>
 <body>
     {% block body %}
-    {% include "partials/nav.html" %}
-    <main class="page-container">
-        {% block content %}{% endblock %}
-    </main>
+    {% set logged_in = request.cookies.get("vrc_dashboard_session") %}
+    {% if logged_in %}<div class="app-shell">{% include "partials/nav.html" %}{% endif %}
+        <main class="page-container">
+            {% block content %}{% endblock %}
+        </main>
+    {% if logged_in %}{% include "partials/friends_sidebar.html" %}</div>{% endif %}
     {% endblock %}
 </body>
 </html>
