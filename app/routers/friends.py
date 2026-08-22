@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_cipher, get_current_user
@@ -19,8 +19,10 @@ from app.models.friend_group import FriendGroup
 from app.models.friend_group_membership import FriendGroupMembership
 from app.models.friend_notification_pref import FriendNotificationPref
 from app.models.friend_presence_event import FriendPresenceEvent
+from app.schemas.vrchat import parse_trust_rank, resolve_profile_image_url
 from app.services import (
     app_config_service,
+    friends_service,
     sidebar_service,
     vrchat_session_service,
     vrchat_sync_service,
@@ -113,7 +115,7 @@ async def friends_page(
 
 
 async def _build_friend_detail_context(
-    db: AsyncSession, friend_id: int
+    db: AsyncSession, cipher: SecretCipher, friend_id: int
 ) -> dict[str, object] | None:
     friend = await db.get(Friend, friend_id)
     if friend is None:
@@ -126,23 +128,53 @@ async def _build_friend_detail_context(
         .limit(_HISTORY_PAGE_SIZE)
     )
     events = result.scalars().all()
+    online_event_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(FriendPresenceEvent)
+            .where(
+                FriendPresenceEvent.friend_id == friend_id,
+                FriendPresenceEvent.event_type == "online",
+            )
+        )
+    ).scalar_one()
     groups = await _fetch_groups(db)
     friend_group_ids = await _fetch_friend_group_ids(db, friend_id)
+
+    # bio/アカウント作成日/会員ランク等はフレンド一覧の簡易オブジェクトに含まれないため、
+    # モーダル表示のたびにVRChatから都度取得する（未連携/通信失敗時はNoneのまま続行）。
+    live_profile = await friends_service.fetch_live_profile(
+        db, cipher, vrchat_user_id=friend.vrchat_user_id
+    )
+    trust_rank = parse_trust_rank(live_profile.tags) if live_profile else None
+    profile_image_url = (
+        resolve_profile_image_url(live_profile)
+        if live_profile
+        else friend.current_avatar_thumbnail_url
+    )
+
     return {
         "friend": friend,
         "pref": pref,
         "events": events,
+        "online_event_count": online_event_count,
         "groups": groups,
         "friend_group_ids": friend_group_ids,
+        "live_profile": live_profile,
+        "trust_rank": trust_rank,
+        "profile_image_url": profile_image_url,
     }
 
 
 @router.get("/{friend_id}/modal", response_class=HTMLResponse)
 async def friend_detail_modal(
-    request: Request, friend_id: int, db: AsyncSession = Depends(get_db)
+    request: Request,
+    friend_id: int,
+    db: AsyncSession = Depends(get_db),
+    cipher: SecretCipher = Depends(get_cipher),
 ) -> HTMLResponse:
     """フレンド一覧のカードクリックでモーダル表示するための、ナビ無しの断片。"""
-    context = await _build_friend_detail_context(db, friend_id)
+    context = await _build_friend_detail_context(db, cipher, friend_id)
     if context is None:
         return templates.TemplateResponse(
             request, "friends/_not_found_modal.html", status_code=404
@@ -152,9 +184,12 @@ async def friend_detail_modal(
 
 @router.get("/{friend_id}", response_class=HTMLResponse)
 async def friend_detail_page(
-    request: Request, friend_id: int, db: AsyncSession = Depends(get_db)
+    request: Request,
+    friend_id: int,
+    db: AsyncSession = Depends(get_db),
+    cipher: SecretCipher = Depends(get_cipher),
 ) -> HTMLResponse:
-    context = await _build_friend_detail_context(db, friend_id)
+    context = await _build_friend_detail_context(db, cipher, friend_id)
     if context is None:
         return templates.TemplateResponse(
             request, "friends/not_found.html", status_code=404

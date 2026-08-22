@@ -138,6 +138,15 @@ class VRChatClient:
         response = await self._request("GET", "/auth/user")
         return VRChatUser.model_validate(response.json())
 
+    async def get_user(self, vrchat_user_id: str) -> VRChatUser:
+        """指定ユーザーのフルプロフィール（bio/アカウント作成日/会員ランク等を含む）を取得する。
+
+        フレンド一覧(/auth/user/friends)の簡易オブジェクトには含まれない項目を
+        補完するため、フレンド詳細モーダル表示時に個別取得する用途を想定。
+        """
+        response = await self._request("GET", f"/users/{vrchat_user_id}")
+        return VRChatUser.model_validate(response.json())
+
     async def get_friends(self, *, offline: bool = False) -> list[VRChatUser]:
         """フレンド一覧を取得する（ページングして全件回収）。"""
         friends: list[VRChatUser] = []

@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.security import SecretCipher
 from app.models.friend import Friend
 from app.models.friend_group import FriendGroup
 from app.models.friend_group_membership import FriendGroupMembership
@@ -13,6 +14,8 @@ from app.models.friend_presence_event import FriendPresenceEvent
 from app.schemas.vrchat import VRChatFavorite, VRChatFavoriteGroup, VRChatUser
 from app.services import friends_service
 from tests.fakes import FakeNotificationSender
+
+_TEST_FERNET_KEY = "gdsF_NX-iLtl8QLOwmQyFeEdQtOmWXiAlHD4kTrLuh4="
 
 
 async def test_handle_friend_online_creates_friend_and_event(
@@ -188,3 +191,14 @@ async def test_sync_favorite_groups_links_memberships(
 
         membership = await db.get(FriendGroupMembership, (friend.id, group.id))
         assert membership is not None
+
+
+async def test_fetch_live_profile_returns_none_without_vrchat_session(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    cipher = SecretCipher(_TEST_FERNET_KEY)
+    async with db_session_factory() as db:
+        profile = await friends_service.fetch_live_profile(
+            db, cipher, vrchat_user_id="usr_no_session"
+        )
+        assert profile is None

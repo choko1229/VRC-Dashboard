@@ -38,6 +38,19 @@ class VRChatUser(BaseModel):
         default=None, alias="currentAvatarThumbnailImageUrl"
     )
 
+    # --- 以下は`GET /users/{id}`（フルプロフィール）でのみ取得できる項目。
+    #     フレンド一覧(/auth/user/friends)の簡易オブジェクトには含まれない。 ---
+    bio: str | None = None
+    # VRChatはプライバシー上、時刻を含まない日付文字列（例: "2020-01-01"）を返す。
+    date_joined: str | None = Field(default=None, alias="dateJoined")
+    last_platform: str | None = Field(default=None, alias="last_platform")
+    # 会員ランク（Visitor/New User/User/Known User/Trusted User等）はtagsから推定する。
+    tags: list[str] = Field(default_factory=list)
+    profile_pic_override: str | None = Field(default=None, alias="profilePicOverride")
+    user_icon: str | None = Field(default=None, alias="userIcon")
+    # 自分がそのユーザーに付けているメモ（認証済みリクエストの場合のみ返る）。
+    note: str | None = None
+
 
 class VRChatFavoriteGroup(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
@@ -158,3 +171,44 @@ def parse_instance_region_flag(location: str | None) -> str:
     if match is None:
         return "🌐"
     return _REGION_FLAGS.get(match.group(1).lower(), "🌐")
+
+
+# tagsに含まれる"system_trust_*"から会員ランクを判定する（コミュニティ整備の慣例。
+# 公式に明文化された仕様ではないため、VRChat側の変更で外れる可能性がある）。
+_TRUST_RANK_BY_TAG: list[tuple[str, str]] = [
+    ("system_trust_veteran", "Trusted User"),
+    ("system_trust_trusted", "Known User"),
+    ("system_trust_known", "User"),
+    ("system_trust_basic", "New User"),
+]
+
+
+def parse_trust_rank(tags: list[str]) -> str:
+    """フレンドの会員ランク（Visitor/New User/User/Known User/Trusted User）を推定する。"""
+    for tag, rank in _TRUST_RANK_BY_TAG:
+        if tag in tags:
+            return rank
+    return "Visitor"
+
+
+def resolve_profile_image_url(user: VRChatUser) -> str | None:
+    """プロフィール画像として最も適切なURLを選ぶ（未設定時はアバターサムネイルにフォールバック）。"""
+    return (
+        user.profile_pic_override
+        or user.user_icon
+        or user.current_avatar_thumbnail_image_url
+    )
+
+
+_PLATFORM_LABELS: dict[str, str] = {
+    "standalonewindows": "PC (Windows)",
+    "android": "Android (Quest)",
+    "ios": "iOS",
+}
+
+
+def parse_platform_label(last_platform: str | None) -> str | None:
+    """last_platformの値（例: "standalonewindows"）を人が読みやすい表記に変換する。"""
+    if not last_platform:
+        return None
+    return _PLATFORM_LABELS.get(last_platform.lower(), last_platform)

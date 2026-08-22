@@ -353,6 +353,76 @@ body {
     color: var(--color-friends-primary);
 }
 
+/* フレンド詳細（モーダル/フルページ共通） */
+.friend-profile-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+.friend-profile-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: var(--radius-lg);
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.friend-profile-header-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-width: 0;
+}
+
+.friend-profile-header-text .app-heading {
+    margin: 0;
+}
+
+.friend-profile-status {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+}
+
+.friend-profile-status-message {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+.tag-chip-friends {
+    background-color: var(--color-friends-primary);
+    align-self: flex-start;
+}
+
+.friend-profile-bio {
+    white-space: pre-wrap;
+    background-color: var(--color-bg);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+}
+
+.friend-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--space-3) var(--space-5);
+    margin: 0 0 var(--space-4);
+}
+
+.friend-info-grid dt {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+}
+
+.friend-info-grid dd {
+    margin: 0;
+    font-size: var(--text-sm);
+    word-break: break-all;
+}
+
 .text-muted {
     color: var(--color-text-muted);
 }

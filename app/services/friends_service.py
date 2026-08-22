@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import SecretCipher
 from app.models.friend import Friend
 from app.models.friend_group import FriendGroup
 from app.models.friend_group_membership import FriendGroupMembership
@@ -24,6 +25,8 @@ from app.schemas.vrchat import (
     VRChatUser,
     parse_world_id_from_location,
 )
+from app.services import app_config_service, vrchat_session_service
+from app.services.vrchat.client import VRChatAPIError, VRChatClient
 
 logger = logging.getLogger(__name__)
 
@@ -318,3 +321,27 @@ async def handle_friend_status_update(db: AsyncSession, *, vrchat_user: VRChatUs
     friend.current_avatar_thumbnail_url = vrchat_user.current_avatar_thumbnail_image_url
     friend.last_updated_at = datetime.now(UTC)
     await db.commit()
+
+
+async def fetch_live_profile(
+    db: AsyncSession, cipher: SecretCipher, *, vrchat_user_id: str
+) -> VRChatUser | None:
+    """フレンド詳細モーダル用に、bio/アカウント作成日/会員ランク等のフルプロフィールを
+    VRChatから都度取得する。VRChat未連携時や通信失敗時はNoneを返し、呼び出し側は
+    ローカルに保存済みの情報のみで表示を続行する。
+    """
+    cookies = await vrchat_session_service.get_decrypted_cookies(db, cipher)
+    if cookies is None:
+        return None
+    auth_cookie, two_factor_cookie = cookies
+    user_agent = await app_config_service.get_vrchat_user_agent(db)
+    client = VRChatClient(
+        user_agent=user_agent, auth_cookie=auth_cookie, two_factor_cookie=two_factor_cookie
+    )
+    try:
+        return await client.get_user(vrchat_user_id)
+    except VRChatAPIError:
+        logger.warning("フレンドのフルプロフィール取得に失敗しました: %s", vrchat_user_id)
+        return None
+    finally:
+        await client.close()
