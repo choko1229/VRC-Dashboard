@@ -19,8 +19,8 @@ import websockets
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.notifications.base import NotificationPayload, NotificationSender
-from app.schemas.vrchat import VRChatUser
-from app.services import friends_service
+from app.schemas.vrchat import VRChatUser, parse_world_id_from_location
+from app.services import friends_service, vrchat_session_service
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,19 @@ async def _on_friend_online(
         display_name=str(display_name),
         location=location if isinstance(location, str) else None,
         world_name=world_name if isinstance(world_name, str) else None,
+    )
+
+
+async def _on_friend_active(
+    db: AsyncSession, sender: NotificationSender, content: dict[str, Any]
+) -> None:
+    """接続中だがワールドに滞在していない（Web/メニュー等）状態への遷移。"""
+    user_id = content.get("userId")
+    if not isinstance(user_id, str):
+        return
+    display_name = content.get("displayName") or user_id
+    await friends_service.handle_friend_active(
+        db, sender, vrchat_user_id=user_id, display_name=str(display_name)
     )
 
 
@@ -101,11 +114,29 @@ async def _on_friend_update(
     await friends_service.handle_friend_status_update(db, vrchat_user=vrchat_user)
 
 
+async def _on_user_location(
+    db: AsyncSession, _sender: NotificationSender, content: dict[str, Any]
+) -> None:
+    """自分（操作者）自身の現在地の変化。「同じインスタンス」判定に使う。"""
+    location = content.get("location")
+    world = content.get("world")
+    world_name = world.get("name") if isinstance(world, dict) else None
+    location_str = location if isinstance(location, str) else None
+    await vrchat_session_service.update_self_location(
+        db,
+        location=location_str,
+        world_id=parse_world_id_from_location(location_str),
+        world_name=world_name if isinstance(world_name, str) else None,
+    )
+
+
 _EVENT_HANDLERS: dict[str, EventHandler] = {
     "friend-online": _on_friend_online,
+    "friend-active": _on_friend_active,
     "friend-offline": _on_friend_offline,
     "friend-location": _on_friend_location,
     "friend-update": _on_friend_update,
+    "user-location": _on_user_location,
 }
 
 

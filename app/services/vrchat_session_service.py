@@ -77,3 +77,19 @@ async def mark_invalid(db: AsyncSession) -> None:
 async def touch_last_validated(db: AsyncSession, session: VRChatSession) -> None:
     session.last_validated_at = datetime.now(UTC)
     await db.commit()
+
+
+async def update_self_location(
+    db: AsyncSession, *, location: str | None, world_id: str | None, world_name: str | None
+) -> None:
+    """Pipelineの"user-location"イベントで、自分（操作者）自身の現在地を更新する。
+
+    サイドバーの「同じインスタンス」判定に使う（app.services.friends_service参照）。
+    """
+    session = await get_active_session(db)
+    if session is None:
+        return
+    session.self_location = location
+    session.self_world_id = world_id
+    session.self_world_name = world_name
+    await db.commit()

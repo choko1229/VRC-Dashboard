@@ -68,12 +68,23 @@ async def bootstrap_friends_from_vrchat(
         friend.display_name = vrchat_user.display_name
         friend.is_online = is_online
         friend.activity_status = vrchat_user.status
+        if is_online:
+            # VRChat APIが"state"を返さない/想定外の値の場合でも、is_online=Trueである以上
+            # 最低限"online"扱いにする（"same instance"判定等が壊れないようにする）。
+            valid_state = vrchat_user.state in ("online", "active")
+            friend.online_state = vrchat_user.state if valid_state else "online"
+        else:
+            friend.online_state = "offline"
         friend.current_avatar_thumbnail_url = vrchat_user.current_avatar_thumbnail_image_url
         if is_online:
             world_id = parse_world_id_from_location(vrchat_user.location)
             friend.current_world_id = world_id
             friend.current_location = vrchat_user.location
             friend.last_seen_online_at = now
+        else:
+            friend.current_world_id = None
+            friend.current_world_name = None
+            friend.current_location = None
         friend.last_updated_at = now
 
     await db.commit()
@@ -143,6 +154,7 @@ async def handle_friend_online(
     friend = await _get_or_create_friend(db, vrchat_user_id, display_name)
     friend.display_name = display_name
     friend.is_online = True
+    friend.online_state = "online"
     world_id = parse_world_id_from_location(location)
     friend.current_world_id = world_id
     friend.current_world_name = world_name
@@ -179,11 +191,49 @@ async def handle_friend_online(
     )
 
 
+async def handle_friend_active(
+    db: AsyncSession, sender: NotificationSender, *, vrchat_user_id: str, display_name: str
+) -> None:
+    """friend-activeイベント: 接続中だがワールドに滞在していない（Web/メニュー等）状態。"""
+    friend = await _get_or_create_friend(db, vrchat_user_id, display_name)
+    friend.display_name = display_name
+    was_online = friend.is_online
+    friend.is_online = True
+    friend.online_state = "active"
+    friend.current_world_id = None
+    friend.current_world_name = None
+    friend.current_location = None
+    now = datetime.now(UTC)
+    friend.last_seen_online_at = now
+    friend.last_updated_at = now
+
+    db.add(FriendPresenceEvent(friend_id=friend.id, event_type="online", occurred_at=now))
+    await db.commit()
+
+    if was_online:
+        return
+    pref = await _get_notification_pref(db, friend.id)
+    await _maybe_notify(
+        sender,
+        pref,
+        should_notify=pref.notify_on_online if pref else False,
+        payload=NotificationPayload(
+            type="friend_online",
+            friend_vrchat_user_id=vrchat_user_id,
+            friend_display_name=display_name,
+            world_name=None,
+            occurred_at=now,
+            message=f"{display_name} がオンラインになりました。",
+        ),
+    )
+
+
 async def handle_friend_offline(
     db: AsyncSession, sender: NotificationSender, *, vrchat_user_id: str, display_name: str
 ) -> None:
     friend = await _get_or_create_friend(db, vrchat_user_id, display_name)
     friend.is_online = False
+    friend.online_state = "offline"
     friend.current_world_id = None
     friend.current_world_name = None
     friend.current_location = None
@@ -223,6 +273,7 @@ async def handle_friend_location_change(
     friend = await _get_or_create_friend(db, vrchat_user_id, display_name)
     world_id = parse_world_id_from_location(location)
     friend.is_online = True
+    friend.online_state = "online"
     friend.current_world_id = world_id
     friend.current_world_name = world_name
     friend.current_location = location

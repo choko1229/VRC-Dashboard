@@ -167,8 +167,21 @@ body {
     margin-right: var(--space-2);
 }
 
-.status-dot.status-online {
+.status-dot.status-online,
+.status-dot.status-active {
     background-color: var(--color-status-online);
+}
+
+.status-dot.status-joinme {
+    background-color: var(--color-status-joinme);
+}
+
+.status-dot.status-askme {
+    background-color: var(--color-status-askme);
+}
+
+.status-dot.status-busy {
+    background-color: var(--color-status-busy);
 }
 
 .status-dot.status-offline {
@@ -535,6 +548,43 @@ body {
 .sidebar-heading {
     font-size: var(--text-base);
     margin: 0 0 var(--space-4);
+}
+
+.sidebar-group {
+    margin-bottom: var(--space-3);
+}
+
+.sidebar-group summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: var(--space-2) var(--space-1);
+    list-style: none;
+}
+
+.sidebar-group summary::-webkit-details-marker {
+    display: none;
+}
+
+.sidebar-group summary::before {
+    content: "▾";
+    display: inline-block;
+    transition: transform 0.15s ease;
+}
+
+.sidebar-group:not([open]) summary::before {
+    transform: rotate(-90deg);
+}
+
+.sidebar-instance-info {
+    margin: 0 0 var(--space-2);
+    padding: 0 var(--space-1);
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
 }
 
 .sidebar-friends-list {

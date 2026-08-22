@@ -95,13 +95,59 @@ async def test_handle_friend_offline_clears_world_info(
         assert {e.event_type for e in events} == {"online", "offline"}
 
 
+async def test_handle_friend_active_sets_online_state_without_location(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        sender = FakeNotificationSender()
+        await friends_service.handle_friend_active(
+            db, sender, vrchat_user_id="usr_active", display_name="Dave"
+        )
+
+        result = await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_active"))
+        friend = result.scalar_one()
+        assert friend.is_online is True
+        assert friend.online_state == "active"
+        assert friend.current_world_id is None
+        assert friend.current_location is None
+
+
+async def test_handle_friend_online_then_offline_updates_online_state(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        sender = FakeNotificationSender()
+        await friends_service.handle_friend_online(
+            db,
+            sender,
+            vrchat_user_id="usr_state",
+            display_name="Erin",
+            location="wrld_a:1",
+            world_name="World A",
+        )
+        result = await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_state"))
+        assert result.scalar_one().online_state == "online"
+
+        await friends_service.handle_friend_offline(
+            db, sender, vrchat_user_id="usr_state", display_name="Erin"
+        )
+        result = await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_state"))
+        assert result.scalar_one().online_state == "offline"
+
+
 async def test_bootstrap_friends_from_vrchat(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
         online = [
             VRChatUser.model_validate(
-                {"id": "usr_a", "displayName": "A", "status": "active", "location": "wrld_1:1"}
+                {
+                    "id": "usr_a",
+                    "displayName": "A",
+                    "status": "active",
+                    "state": "online",
+                    "location": "wrld_1:1",
+                }
             )
         ]
         offline = [
@@ -115,7 +161,9 @@ async def test_bootstrap_friends_from_vrchat(
         by_id = {f.vrchat_user_id: f for f in friends}
         assert by_id["usr_a"].is_online is True
         assert by_id["usr_a"].current_world_id == "wrld_1"
+        assert by_id["usr_a"].online_state == "online"
         assert by_id["usr_b"].is_online is False
+        assert by_id["usr_b"].online_state == "offline"
 
 
 async def test_sync_favorite_groups_links_memberships(

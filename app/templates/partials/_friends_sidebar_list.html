@@ -1,21 +1,56 @@
-<ul class="sidebar-friends-list">
-    {% for friend in friends %}
-    <li>
-        <a href="/friends/{{ friend.id }}" class="sidebar-friend-link">
-            {% if friend.current_avatar_thumbnail_url %}
-            <img src="{{ friend.current_avatar_thumbnail_url }}" class="sidebar-friend-thumb" alt="">
-            {% else %}
-            <span class="sidebar-friend-thumb sidebar-friend-thumb-placeholder"></span>
-            {% endif %}
-            <span class="sidebar-friend-text">
-                <span class="sidebar-friend-name">
-                    <span class="status-dot status-online"></span>{{ friend.display_name }}
-                </span>
-                <span class="sidebar-friend-world">{{ friend.current_world_name or "不明なワールド" }}</span>
+{% macro friend_row(friend, show_location) %}
+<li>
+    <a href="/friends/{{ friend.id }}" class="sidebar-friend-link">
+        {% if friend.current_avatar_thumbnail_url %}
+        <img src="{{ friend.current_avatar_thumbnail_url }}" class="sidebar-friend-thumb" alt="">
+        {% else %}
+        <span class="sidebar-friend-thumb sidebar-friend-thumb-placeholder"></span>
+        {% endif %}
+        <span class="sidebar-friend-text">
+            <span class="sidebar-friend-name">
+                <span class="status-dot status-{{ status_dot_class(friend.activity_status) }}"></span>{{ friend.display_name }}
             </span>
-        </a>
-    </li>
-    {% else %}
-    <li class="placeholder">オンラインのフレンドはいません。</li>
-    {% endfor %}
-</ul>
+            {% if show_location %}
+            <span class="sidebar-friend-world">
+                {% if friend.current_world_name %}{{ friend.current_world_name }}・{{ instance_privacy_label(friend.current_location) }}{% else %}プライベート{% endif %}
+            </span>
+            {% endif %}
+        </span>
+    </a>
+</li>
+{% endmacro %}
+
+{% if not groups.same_instance and not groups.online and not groups.active %}
+<p class="placeholder">オンラインのフレンドはいません。</p>
+{% endif %}
+
+{% if groups.same_instance %}
+<details id="sidebar-group-same-instance" class="sidebar-group" open>
+    <summary>同じインスタンス — {{ groups.same_instance.friend_count }}</summary>
+    <p class="sidebar-instance-info">
+        {{ groups.same_instance.world_name or "不明なワールド" }}・{{ groups.same_instance.privacy_label }}
+        ({{ groups.same_instance.friend_count }}{% if groups.same_instance.instance_total is not none %}/{{ groups.same_instance.instance_total }}{% endif %})
+    </p>
+    <ul class="sidebar-friends-list">
+        {% for friend in groups.same_instance.friends %}{{ friend_row(friend, false) }}{% endfor %}
+    </ul>
+</details>
+{% endif %}
+
+{% if groups.online %}
+<details id="sidebar-group-online" class="sidebar-group" open>
+    <summary>オンライン — {{ groups.online|length }}</summary>
+    <ul class="sidebar-friends-list">
+        {% for friend in groups.online %}{{ friend_row(friend, true) }}{% endfor %}
+    </ul>
+</details>
+{% endif %}
+
+{% if groups.active %}
+<details id="sidebar-group-active" class="sidebar-group" open>
+    <summary>アクティブ — {{ groups.active|length }}</summary>
+    <ul class="sidebar-friends-list">
+        {% for friend in groups.active %}{{ friend_row(friend, false) }}{% endfor %}
+    </ul>
+</details>
+{% endif %}

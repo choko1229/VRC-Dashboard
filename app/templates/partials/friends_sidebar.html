@@ -1,9 +1,10 @@
 {% if request.cookies.get("vrc_dashboard_session") %}
 <aside class="app-friends-sidebar">
     <h2 class="sidebar-heading">オンラインのフレンド</h2>
-    <div hx-get="/partials/friends-sidebar" hx-trigger="load, every 15s" hx-swap="innerHTML">
+    <div id="friends-sidebar-content" hx-get="/partials/friends-sidebar" hx-trigger="load, every 15s" hx-swap="innerHTML">
         <p class="placeholder">読み込み中...</p>
     </div>
     <a href="/friends" class="sidebar-see-all">フレンド一覧を見る →</a>
 </aside>
+<script src="/static/js/friends-sidebar.js" defer></script>
 {% endif %}

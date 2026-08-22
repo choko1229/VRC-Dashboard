@@ -29,3 +29,9 @@ class VRChatSession(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # 自分（ダッシュボード操作者）自身の現在地。Pipelineの"user-location"イベントで更新する。
+    # 「同じインスタンス」のフレンド判定（サイドバー表示）に使う。
+    self_location: Mapped[str | None] = mapped_column(String(150), default=None)
+    self_world_id: Mapped[str | None] = mapped_column(String(100), default=None)
+    self_world_name: Mapped[str | None] = mapped_column(String(255), default=None)

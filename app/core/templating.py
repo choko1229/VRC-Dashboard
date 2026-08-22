@@ -8,6 +8,7 @@ from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
 from app.models.dashboard_user import DashboardUser
+from app.schemas.vrchat import parse_instance_privacy_label
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -23,4 +24,11 @@ def current_dashboard_user(request: Request) -> DashboardUser | None:
     return user if isinstance(user, DashboardUser) else None
 
 
+def status_dot_class(activity_status: str) -> str:
+    """"join me"/"ask me"等スペースを含む気分ステータス値をCSSクラス名に変換する。"""
+    return activity_status.replace(" ", "")
+
+
 templates.env.globals["current_dashboard_user"] = current_dashboard_user
+templates.env.globals["instance_privacy_label"] = parse_instance_privacy_label
+templates.env.globals["status_dot_class"] = status_dot_class

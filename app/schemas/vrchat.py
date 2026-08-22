@@ -18,9 +18,11 @@ class VRChatUser(BaseModel):
 
     id: str
     display_name: str = Field(alias="displayName")
-    # active / join me / ask me / busy / offline
+    # active / join me / ask me / busy / offline （気分ステータス）
     status: str = "offline"
     status_description: str | None = Field(default=None, alias="statusDescription")
+    # online（ワールドに滞在中） / active（接続中だがワールド不明） / offline （接続状態）
+    state: str = "offline"
     # "offline" | "private" | "traveling" | "wrld_xxx:instanceId..." 等
     location: str | None = None
     current_avatar_thumbnail_image_url: str | None = Field(
@@ -92,6 +94,14 @@ class VRChatWorld(BaseModel):
     name: str
 
 
+class VRChatInstance(BaseModel):
+    """`GET /instances/{location}` のレスポンス。インスタンスの現在人数取得に使う。"""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    n_users: int = Field(default=0, alias="n_users")
+
+
 def parse_world_id_from_location(location: str | None) -> str | None:
     """"wrld_xxx:instanceId~..." 形式のlocationからworld_idを取り出す。
 
@@ -101,3 +111,28 @@ def parse_world_id_from_location(location: str | None) -> str | None:
         return None
     world_id, _, _ = location.partition(":")
     return world_id or None
+
+
+def parse_instance_privacy_label(location: str | None) -> str:
+    """locationのインスタンスタグから公開範囲の日本語ラベルを推定する（コミュニティ整備の
+    非公式ドキュメントに基づく慣例的な解釈。VRChat側の仕様変更で外れる可能性がある）。"""
+    if location is None or location in ("offline", "private", "traveling"):
+        return "プライベート"
+
+    _, _, instance_part = location.partition(":")
+    if not instance_part:
+        return "パブリック"
+
+    if "~group(" in instance_part:
+        if "~groupAccessType(public)" in instance_part:
+            return "グループパブリック"
+        return "グループ"
+    if "~hidden(" in instance_part:
+        return "フレンド"
+    if "~friends(" in instance_part:
+        return "フレンド+"
+    if "~private(" in instance_part:
+        if "~canRequestInvite" in instance_part:
+            return "招待+"
+        return "招待"
+    return "パブリック"

@@ -18,6 +18,7 @@ from app.schemas.vrchat import (
     VRChatCalendarEvent,
     VRChatFavorite,
     VRChatFavoriteGroup,
+    VRChatInstance,
     VRChatUser,
 )
 
@@ -237,3 +238,15 @@ class VRChatClient:
         if isinstance(name, str):
             self._world_name_cache[world_id] = name
         return name if isinstance(name, str) else None
+
+    async def get_instance(self, location: str) -> VRChatInstance | None:
+        """インスタンスの現在人数等を取得する（サイドバーの「同じインスタンス」表示用）。
+
+        エンドポイント: GET /instances/{location}。非公開インスタンス等で取得できない
+        場合はNoneを返す（呼び出し側は人数表示を省略する）。
+        """
+        try:
+            response = await self._request("GET", f"/instances/{quote(location, safe='')}")
+        except VRChatAPIError:
+            return None
+        return VRChatInstance.model_validate(response.json())

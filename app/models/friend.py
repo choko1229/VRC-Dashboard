@@ -22,8 +22,12 @@ class Friend(Base):
     vrchat_user_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(100))
     is_online: Mapped[bool] = mapped_column(default=False)
-    # VRChatの実際のstatus値: active / join me / ask me / busy / offline
+    # VRChatの実際のstatus値: active / join me / ask me / busy / offline（気分ステータス）
     activity_status: Mapped[str] = mapped_column(String(20), default="offline")
+    # VRChatの接続状態: online（ワールドに滞在中）/ active（接続中だがワールド不明）/ offline
+    # activity_statusとは別概念（VRChat APIの"state"フィールドに対応）。
+    # サイドバーの「同じインスタンス/オンライン/アクティブ」区分に使う。
+    online_state: Mapped[str] = mapped_column(String(10), default="offline")
     current_world_id: Mapped[str | None] = mapped_column(String(100), default=None)
     current_world_name: Mapped[str | None] = mapped_column(String(255), default=None)
     current_location: Mapped[str | None] = mapped_column(String(150), default=None)
