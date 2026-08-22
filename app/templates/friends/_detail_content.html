@@ -1,0 +1,24 @@
+<h1 class="app-heading">{{ friend.display_name }}</h1>
+<p>
+    <span class="status-dot status-{{ 'online' if friend.is_online else 'offline' }}"></span>
+    {% if friend.is_online %}{{ friend.current_world_name or "不明なワールド" }}{% else %}オフライン{% endif %}
+</p>
+
+<h2>通知設定</h2>
+<div id="notification-form">
+    {% include "friends/_notification_form.html" %}
+</div>
+
+<h2>所属グループ</h2>
+<div id="friend-groups">
+    {% include "friends/_friend_groups.html" %}
+</div>
+
+<h2>状態履歴（直近{{ events|length }}件）</h2>
+<ul class="history-list">
+    {% for event in events %}
+    <li>{{ event.occurred_at }} - {{ event.event_type }}{% if event.world_name %} ({{ event.world_name }}){% endif %}</li>
+    {% else %}
+    <li class="placeholder">履歴がありません。</li>
+    {% endfor %}
+</ul>

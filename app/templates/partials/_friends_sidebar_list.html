@@ -20,8 +20,8 @@
 </li>
 {% endmacro %}
 
-{% if not groups.same_instance and not groups.online and not groups.active %}
-<p class="placeholder">オンラインのフレンドはいません。</p>
+{% if not groups.same_instance and not groups.online and not groups.active and not groups.offline %}
+<p class="placeholder">フレンドがいません。</p>
 {% endif %}
 
 {% if groups.same_instance %}
@@ -51,6 +51,15 @@
     <summary>アクティブ — {{ groups.active|length }}</summary>
     <ul class="sidebar-friends-list">
         {% for friend in groups.active %}{{ friend_row(friend, false) }}{% endfor %}
+    </ul>
+</details>
+{% endif %}
+
+{% if groups.offline %}
+<details id="sidebar-group-offline" class="sidebar-group">
+    <summary>オフライン — {{ groups.offline|length }}</summary>
+    <ul class="sidebar-friends-list">
+        {% for friend in groups.offline %}{{ friend_row(friend, false) }}{% endfor %}
     </ul>
 </details>
 {% endif %}

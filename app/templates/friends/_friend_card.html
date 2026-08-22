@@ -1,0 +1,28 @@
+{% from "partials/icons.html" import icon_edit %}
+{% macro friend_card(friend) %}
+<a class="friend-card-v2"
+   href="/friends/{{ friend.id }}"
+   hx-get="/friends/{{ friend.id }}/modal"
+   hx-target="#friend-modal-body"
+   hx-swap="innerHTML">
+    <span class="friend-card-avatar-wrap">
+        {% if friend.current_avatar_thumbnail_url %}
+        <img class="friend-card-avatar" src="{{ friend.current_avatar_thumbnail_url }}" alt="">
+        {% else %}
+        <span class="friend-card-avatar friend-card-avatar-placeholder"></span>
+        {% endif %}
+        <span class="status-dot status-{{ status_dot_class(friend.activity_status) }} friend-card-status-dot"></span>
+    </span>
+    <span class="friend-card-body">
+        <span class="friend-card-name">{{ friend.display_name }}</span>
+        <span class="friend-card-status-message">
+            {% if friend.status_message %}{{ icon_edit(12) }}{{ friend.status_message }}{% endif %}
+        </span>
+        <span class="friend-card-location">
+            {% if friend.online_state == "offline" %}オフライン
+            {% elif friend.current_world_name %}{{ instance_region_flag(friend.current_location) }} {{ friend.current_world_name }}・{{ instance_privacy_label(friend.current_location) }}
+            {% else %}プライベート{% endif %}
+        </span>
+    </span>
+</a>
+{% endmacro %}

@@ -1,4 +1,4 @@
-"""フェーズ7: サイドバーのフレンド区分（同じインスタンス/オンライン/アクティブ）のテスト。"""
+"""フェーズ7: サイドバーのフレンド区分（同じインスタンス/オンライン/アクティブ/オフライン）。"""
 
 from __future__ import annotations
 
@@ -68,6 +68,50 @@ async def test_groups_friends_without_self_location(
         assert groups.same_instance is None
         assert [f.vrchat_user_id for f in groups.online] == ["usr_online"]
         assert [f.vrchat_user_id for f in groups.active] == ["usr_active"]
+        assert [f.vrchat_user_id for f in groups.offline] == ["usr_offline"]
+
+
+async def test_friend_limit_prioritizes_online_over_offline(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    from app.services.sidebar_service import _SIDEBAR_FRIEND_LIMIT
+
+    cipher = SecretCipher(_TEST_FERNET_KEY)
+    extra_offline_count = _SIDEBAR_FRIEND_LIMIT + 5
+
+    async with db_session_factory() as db:
+        for i in range(extra_offline_count):
+            db.add(
+                Friend(
+                    vrchat_user_id=f"usr_offline_{i}",
+                    display_name=f"Z_offline_{i:03d}",
+                    is_online=False,
+                    online_state="offline",
+                )
+            )
+        db.add(
+            Friend(
+                vrchat_user_id="usr_online_priority",
+                display_name="A_online",
+                is_online=True,
+                online_state="online",
+                current_location="wrld_x:1",
+            )
+        )
+        await db.commit()
+
+        groups = await sidebar_service.get_friend_sidebar_groups(db, cipher)
+
+        total_returned = (
+            len(groups.online)
+            + len(groups.active)
+            + len(groups.offline)
+            + (groups.same_instance.friend_count if groups.same_instance else 0)
+        )
+        assert total_returned == _SIDEBAR_FRIEND_LIMIT
+        # 上限を超えても、オンラインのフレンドは切り詰められずに残る。
+        assert [f.vrchat_user_id for f in groups.online] == ["usr_online_priority"]
+        assert len(groups.offline) == _SIDEBAR_FRIEND_LIMIT - 1
 
 
 async def test_groups_same_instance_friends_with_instance_population(

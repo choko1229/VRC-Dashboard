@@ -1,8 +1,11 @@
-"""サイドバーのオンラインフレンド一覧を「同じインスタンス/オンライン/アクティブ」に区分する。
+"""サイドバーのフレンド一覧を「同じインスタンス/オンライン/アクティブ/オフライン」に区分する。
 
 「同じインスタンス」は自分（ダッシュボード操作者）自身の現在地
 （vrchat_session.self_location、Pipelineの"user-location"イベントで更新）と
 フレンドのcurrent_locationが一致するかどうかで判定する。
+
+表示件数は`_SIDEBAR_FRIEND_LIMIT`（100人）を上限とし、超える場合はオンライン/
+アクティブなフレンドが優先的に残るよう並べ替えてから切り詰める。
 """
 
 from __future__ import annotations
@@ -10,7 +13,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import SecretCipher
@@ -23,6 +26,9 @@ from app.services.vrchat.client import VRChatClient
 # サイドバーの短いポーリング間隔(15秒)に対して過度に叩かないよう軽くキャッシュする。
 _INSTANCE_POPULATION_CACHE_TTL_SECONDS = 20.0
 _instance_population_cache: dict[str, tuple[float, int]] = {}
+
+# サイドバーに表示するフレンドの上限（多すぎる場合はオンライン/アクティブを優先する）。
+_SIDEBAR_FRIEND_LIMIT = 100
 
 
 @dataclass
@@ -39,6 +45,7 @@ class SidebarFriendGroups:
     same_instance: SameInstanceGroup | None
     online: list[Friend] = field(default_factory=list)
     active: list[Friend] = field(default_factory=list)
+    offline: list[Friend] = field(default_factory=list)
 
 
 async def _fetch_instance_population(
@@ -74,17 +81,28 @@ async def get_friend_sidebar_groups(
     session = await vrchat_session_service.get_active_session(db)
     self_location = session.self_location if session else None
 
+    # 上限に達する場合でもオンライン/アクティブが優先的に残るよう並べ替えてから切り詰める。
+    online_state_priority = case(
+        (Friend.online_state == "online", 0),
+        (Friend.online_state == "active", 1),
+        else_=2,
+    )
     result = await db.execute(
-        select(Friend).where(Friend.online_state != "offline").order_by(Friend.display_name)
+        select(Friend)
+        .order_by(online_state_priority, Friend.display_name)
+        .limit(_SIDEBAR_FRIEND_LIMIT)
     )
     friends = list(result.scalars().all())
 
     same_instance_friends: list[Friend] = []
     online_friends: list[Friend] = []
     active_friends: list[Friend] = []
+    offline_friends: list[Friend] = []
 
     for friend in friends:
-        if friend.online_state == "active":
+        if friend.online_state == "offline":
+            offline_friends.append(friend)
+        elif friend.online_state == "active":
             active_friends.append(friend)
         elif self_location and friend.current_location == self_location:
             same_instance_friends.append(friend)
@@ -103,5 +121,8 @@ async def get_friend_sidebar_groups(
         )
 
     return SidebarFriendGroups(
-        same_instance=same_instance_group, online=online_friends, active=active_friends
+        same_instance=same_instance_group,
+        online=online_friends,
+        active=active_friends,
+        offline=offline_friends,
     )

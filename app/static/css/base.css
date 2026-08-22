@@ -194,49 +194,13 @@ body {
     justify-content: space-between;
 }
 
-.friend-filter-bar {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    flex-wrap: wrap;
-    margin: var(--space-4) 0;
+.friend-section-heading {
+    font-size: var(--text-lg);
+    margin: var(--space-6) 0 var(--space-3);
 }
 
-.friend-tabs {
-    display: flex;
-    gap: var(--space-1);
-    background-color: var(--color-bg);
-    padding: var(--space-1);
-    border-radius: var(--radius-pill);
-}
-
-.friend-tab {
-    border: none;
-    background: transparent;
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-pill);
-    font-size: var(--text-sm);
-    color: var(--color-text-muted);
-    cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.friend-tab.active {
-    background-color: var(--color-surface);
-    color: var(--color-text);
-    font-weight: 700;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-
-.friend-search {
-    flex: 1;
-    min-width: 200px;
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-pill);
-    border: 1px solid var(--color-border);
-    background-color: var(--color-surface);
-    color: var(--color-text);
-    font-size: var(--text-sm);
+.friend-section-heading:first-of-type {
+    margin-top: var(--space-4);
 }
 
 .friend-instance-header {
@@ -258,14 +222,16 @@ body {
 
 .friend-card-v2 {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: var(--space-2);
-    padding: var(--space-3);
+    height: 78px;
+    padding: 0 var(--space-3);
     border-radius: var(--radius-lg);
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
     text-decoration: none;
     color: var(--color-text);
+    overflow: hidden;
     transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -305,30 +271,86 @@ body {
 .friend-card-body {
     display: flex;
     flex-direction: column;
+    justify-content: center;
     min-width: 0;
+    flex: 1;
     gap: 2px;
+}
+
+/* 内容の有無にかかわらずカードの高さを揃えるため、3行分の高さを常に確保する。 */
+.friend-card-name,
+.friend-card-status-message,
+.friend-card-location {
+    display: block;
+    height: 16px;
+    line-height: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .friend-card-name {
     font-weight: 700;
     font-size: var(--text-sm);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .friend-card-status-message,
 .friend-card-location {
     font-size: var(--text-xs);
     color: var(--color-text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .friend-card-status-message .icon {
     margin-right: 2px;
     vertical-align: -1px;
+}
+
+/* フレンド詳細モーダル */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: var(--space-4);
+}
+
+.modal-overlay.open {
+    display: flex;
+}
+
+.modal-dialog {
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    max-height: 85vh;
+    overflow-y: auto;
+    background-color: var(--color-surface);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+.modal-close-btn {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-bg);
+    color: var(--color-text-muted);
+    font-size: var(--text-base);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.modal-close-btn:hover {
+    background-color: var(--color-friends-bg-soft);
+    color: var(--color-friends-primary);
 }
 
 .text-muted {

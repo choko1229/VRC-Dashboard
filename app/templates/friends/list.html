@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "partials/icons.html" import icon_refresh, icon_settings %}
+{% from "friends/_friend_card.html" import friend_card %}
 {% block title %}フレンド一覧{% endblock %}
 {% block content %}
 <div class="friends-page-header">
@@ -7,10 +8,55 @@
     <a href="/friends/groups/manage" class="icon-btn" title="グループ管理">{{ icon_settings() }}</a>
 </div>
 
-<div id="friends-panel">
-    {% include "friends/_panel.html" %}
-</div>
-
 <p><button class="btn btn-ghost" hx-post="/friends/sync" hx-target="#sync-result" hx-swap="innerHTML">{{ icon_refresh(16) }} VRChatと同期</button></p>
 <div id="sync-result"></div>
+
+{% if sections.favorites %}
+<h2 class="friend-section-heading">お気に入り — {{ sections.favorites|length }}</h2>
+<div class="friend-card-grid">
+    {% for friend in sections.favorites %}{{ friend_card(friend) }}{% endfor %}
+</div>
+{% endif %}
+
+{% if sections.same_instance or sections.online %}
+<h2 class="friend-section-heading">
+    オンライン — {{ sections.online|length + (sections.same_instance.friend_count if sections.same_instance else 0) }}
+</h2>
+{% if sections.same_instance %}
+<div class="friend-instance-header">
+    <span>{{ instance_region_flag(sections.same_instance.friends[0].current_location) }}</span>
+    <span>
+        {{ sections.same_instance.world_name or "不明なワールド" }}・{{ sections.same_instance.privacy_label }}
+        ({{ sections.same_instance.friend_count }}{% if sections.same_instance.instance_total is not none %}/{{ sections.same_instance.instance_total }}{% endif %})
+    </span>
+</div>
+<div class="friend-card-grid">
+    {% for friend in sections.same_instance.friends %}{{ friend_card(friend) }}{% endfor %}
+</div>
+{% endif %}
+{% if sections.online %}
+<div class="friend-card-grid">
+    {% for friend in sections.online %}{{ friend_card(friend) }}{% endfor %}
+</div>
+{% endif %}
+{% endif %}
+
+{% if sections.offline %}
+<h2 class="friend-section-heading">オフライン — {{ sections.offline|length }}</h2>
+<div class="friend-card-grid">
+    {% for friend in sections.offline %}{{ friend_card(friend) }}{% endfor %}
+</div>
+{% endif %}
+
+{% if not sections.favorites and not sections.same_instance and not sections.online and not sections.offline %}
+<p class="placeholder">フレンドがいません。「VRChatと同期」を試してください。</p>
+{% endif %}
+
+<div id="friend-modal" class="modal-overlay">
+    <div class="modal-dialog">
+        <button type="button" class="modal-close-btn" onclick="window.closeFriendModal()" aria-label="閉じる">✕</button>
+        <div id="friend-modal-body"></div>
+    </div>
+</div>
+<script src="/static/js/friend-modal.js" defer></script>
 {% endblock %}

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import replace
-from typing import Literal
+from dataclasses import dataclass, replace
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import case, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_cipher, get_current_user
@@ -35,43 +34,56 @@ router = APIRouter(prefix="/friends", dependencies=[Depends(get_current_user)])
 
 _HISTORY_PAGE_SIZE = 50
 
-FilterTab = Literal["online", "favorites", "active", "offline"]
-_VALID_FILTER_TABS: set[str] = {"online", "favorites", "active", "offline"}
+
+@dataclass
+class FriendSections:
+    """フレンド一覧を「お気に入り／オンライン／オフライン」に区分した結果。
+
+    お気に入り（いずれかのグループに所属）は状態を問わず最優先で分類し、
+    残りをオンライン状態（online/active）かオフラインかで振り分ける。
+    オンライン区分の中では、自分と同じインスタンスにいるフレンドを別枠にまとめる。
+    """
+
+    favorites: list[Friend]
+    same_instance: SameInstanceGroup | None
+    online: list[Friend]
+    offline: list[Friend]
 
 
-def _normalize_filter_tab(value: str) -> FilterTab:
-    return value if value in _VALID_FILTER_TABS else "online"  # type: ignore[return-value]
+async def _fetch_friend_sections(db: AsyncSession, cipher: SecretCipher) -> FriendSections:
+    all_friends_result = await db.execute(select(Friend).order_by(Friend.display_name))
+    all_friends = list(all_friends_result.scalars().all())
 
+    favorite_ids_result = await db.execute(select(FriendGroupMembership.friend_id).distinct())
+    favorite_ids = set(favorite_ids_result.scalars().all())
 
-async def _fetch_friends(
-    db: AsyncSession, *, filter_tab: FilterTab, group_id: int | None, q: str | None
-) -> list[Friend]:
-    query = select(Friend)
-    if filter_tab == "online":
-        query = query.where(Friend.online_state == "online")
-    elif filter_tab == "active":
-        query = query.where(Friend.online_state == "active")
-    elif filter_tab == "offline":
-        query = query.where(Friend.online_state == "offline")
-    elif filter_tab == "favorites":
-        query = query.join(
-            FriendGroupMembership, FriendGroupMembership.friend_id == Friend.id
-        )
-        if group_id is not None:
-            query = query.where(FriendGroupMembership.group_id == group_id)
+    sidebar_groups = await sidebar_service.get_friend_sidebar_groups(db, cipher)
+    same_instance = sidebar_groups.same_instance
+    same_instance_ids: set[int] = set()
+    if same_instance is not None:
+        non_favorite = [f for f in same_instance.friends if f.id not in favorite_ids]
+        if non_favorite:
+            same_instance = replace(
+                same_instance, friends=non_favorite, friend_count=len(non_favorite)
+            )
+            same_instance_ids = {f.id for f in non_favorite}
+        else:
+            same_instance = None
 
-    if q:
-        query = query.where(Friend.display_name.ilike(f"%{q}%"))
-
-    # どのタブでも、状態が混在する場合はオフラインを一番下に回す。
-    online_state_priority = case(
-        (Friend.online_state == "online", 0),
-        (Friend.online_state == "active", 1),
-        else_=2,
+    favorites = [f for f in all_friends if f.id in favorite_ids]
+    online = [
+        f
+        for f in all_friends
+        if f.id not in favorite_ids
+        and f.id not in same_instance_ids
+        and f.online_state != "offline"
+    ]
+    offline = [
+        f for f in all_friends if f.id not in favorite_ids and f.online_state == "offline"
+    ]
+    return FriendSections(
+        favorites=favorites, same_instance=same_instance, online=online, offline=offline
     )
-    query = query.order_by(online_state_priority, Friend.display_name)
-    result = await db.execute(query)
-    return list(result.scalars().unique().all())
 
 
 async def _fetch_groups(db: AsyncSession) -> list[FriendGroup]:
@@ -90,108 +102,22 @@ async def _fetch_friend_group_ids(db: AsyncSession, friend_id: int) -> set[int]:
     return set(result.scalars().all())
 
 
-async def _fetch_friends_with_same_instance(
-    db: AsyncSession,
-    cipher: SecretCipher,
-    *,
-    filter_tab: FilterTab,
-    group_id: int | None,
-    q: str | None,
-) -> tuple[list[Friend], SameInstanceGroup | None]:
-    """「オンライン」タブの場合のみ、自分と同じインスタンスにいるフレンドを別枠にまとめる。
-
-    同じインスタンス枠に入ったフレンドは、下の一覧から重複しないよう除外する。
-    """
-    friends = await _fetch_friends(db, filter_tab=filter_tab, group_id=group_id, q=q)
-    if filter_tab != "online":
-        return friends, None
-
-    groups = await sidebar_service.get_friend_sidebar_groups(db, cipher)
-    same_instance = groups.same_instance
-    if same_instance is None:
-        return friends, None
-
-    if q:
-        query_lower = q.lower()
-        matched = [f for f in same_instance.friends if query_lower in f.display_name.lower()]
-        same_instance = (
-            replace(same_instance, friend_count=len(matched), friends=matched)
-            if matched
-            else None
-        )
-        if same_instance is None:
-            return friends, None
-
-    same_instance_ids = {f.id for f in same_instance.friends}
-    remaining = [f for f in friends if f.id not in same_instance_ids]
-    return remaining, same_instance
-
-
 @router.get("", response_class=HTMLResponse)
 async def friends_page(
     request: Request,
-    filter_tab: str = "online",
-    group_id: int | None = None,
-    q: str | None = None,
     db: AsyncSession = Depends(get_db),
     cipher: SecretCipher = Depends(get_cipher),
 ) -> HTMLResponse:
-    tab = _normalize_filter_tab(filter_tab)
-    friends, same_instance = await _fetch_friends_with_same_instance(
-        db, cipher, filter_tab=tab, group_id=group_id, q=q
-    )
-    groups = await _fetch_groups(db)
-    return templates.TemplateResponse(
-        request,
-        "friends/list.html",
-        {
-            "friends": friends,
-            "same_instance": same_instance,
-            "groups": groups,
-            "selected_group_id": group_id,
-            "filter_tab": tab,
-            "q": q or "",
-        },
-    )
+    sections = await _fetch_friend_sections(db, cipher)
+    return templates.TemplateResponse(request, "friends/list.html", {"sections": sections})
 
 
-@router.get("/partials/list", response_class=HTMLResponse)
-async def friends_list_partial(
-    request: Request,
-    filter_tab: str = "online",
-    group_id: int | None = None,
-    q: str | None = None,
-    db: AsyncSession = Depends(get_db),
-    cipher: SecretCipher = Depends(get_cipher),
-) -> HTMLResponse:
-    tab = _normalize_filter_tab(filter_tab)
-    friends, same_instance = await _fetch_friends_with_same_instance(
-        db, cipher, filter_tab=tab, group_id=group_id, q=q
-    )
-    groups = await _fetch_groups(db)
-    return templates.TemplateResponse(
-        request,
-        "friends/_panel.html",
-        {
-            "friends": friends,
-            "same_instance": same_instance,
-            "groups": groups,
-            "selected_group_id": group_id,
-            "filter_tab": tab,
-            "q": q or "",
-        },
-    )
-
-
-@router.get("/{friend_id}", response_class=HTMLResponse)
-async def friend_detail_page(
-    request: Request, friend_id: int, db: AsyncSession = Depends(get_db)
-) -> HTMLResponse:
+async def _build_friend_detail_context(
+    db: AsyncSession, friend_id: int
+) -> dict[str, object] | None:
     friend = await db.get(Friend, friend_id)
     if friend is None:
-        return templates.TemplateResponse(
-            request, "friends/not_found.html", status_code=404
-        )
+        return None
     pref = await db.get(FriendNotificationPref, friend_id)
     result = await db.execute(
         select(FriendPresenceEvent)
@@ -202,17 +128,38 @@ async def friend_detail_page(
     events = result.scalars().all()
     groups = await _fetch_groups(db)
     friend_group_ids = await _fetch_friend_group_ids(db, friend_id)
-    return templates.TemplateResponse(
-        request,
-        "friends/detail.html",
-        {
-            "friend": friend,
-            "pref": pref,
-            "events": events,
-            "groups": groups,
-            "friend_group_ids": friend_group_ids,
-        },
-    )
+    return {
+        "friend": friend,
+        "pref": pref,
+        "events": events,
+        "groups": groups,
+        "friend_group_ids": friend_group_ids,
+    }
+
+
+@router.get("/{friend_id}/modal", response_class=HTMLResponse)
+async def friend_detail_modal(
+    request: Request, friend_id: int, db: AsyncSession = Depends(get_db)
+) -> HTMLResponse:
+    """フレンド一覧のカードクリックでモーダル表示するための、ナビ無しの断片。"""
+    context = await _build_friend_detail_context(db, friend_id)
+    if context is None:
+        return templates.TemplateResponse(
+            request, "friends/_not_found_modal.html", status_code=404
+        )
+    return templates.TemplateResponse(request, "friends/_detail_content.html", context)
+
+
+@router.get("/{friend_id}", response_class=HTMLResponse)
+async def friend_detail_page(
+    request: Request, friend_id: int, db: AsyncSession = Depends(get_db)
+) -> HTMLResponse:
+    context = await _build_friend_detail_context(db, friend_id)
+    if context is None:
+        return templates.TemplateResponse(
+            request, "friends/not_found.html", status_code=404
+        )
+    return templates.TemplateResponse(request, "friends/detail.html", context)
 
 
 @router.post("/{friend_id}/notifications", response_class=HTMLResponse)
