@@ -122,3 +122,6 @@ tests/                  # unit / integration
   状態）や`user-location`はコミュニティ整備の非公式ドキュメントに基づく実装であり、実際の
   VRChatアカウントでの動作は開発環境（サンドボックス）のTLS制限により未検証。初回デプロイ後に
   実際の見え方を確認することを推奨する。
+- VRChatはPipeline(WebSocket)接続時にデフォルトのUser-Agent（`websockets`ライブラリの既定値等）
+  を`403 Forbidden`で拒否するため、REST APIと同じ設定済みVRChat用User-Agent
+  （`/settings/general`で変更可能）をWebSocketハンドシェイクにも明示的に付与している。

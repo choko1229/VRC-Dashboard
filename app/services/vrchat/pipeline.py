@@ -29,6 +29,7 @@ _PIPELINE_URL = "wss://pipeline.vrchat.cloud/"
 EventHandler = Callable[[AsyncSession, NotificationSender, dict[str, Any]], Awaitable[None]]
 NotificationSenderFactory = Callable[[AsyncSession], Awaitable[NotificationSender]]
 AuthCookieProvider = Callable[[], Awaitable[str | None]]
+UserAgentProvider = Callable[[], Awaitable[str]]
 
 
 async def _on_friend_online(
@@ -149,6 +150,7 @@ class PipelineManager:
         session_factory: async_sessionmaker[AsyncSession],
         notification_sender_factory: NotificationSenderFactory,
         get_auth_cookie: AuthCookieProvider,
+        get_user_agent: UserAgentProvider,
         initial_reconnect_seconds: float,
         max_reconnect_seconds: float,
         notify_after_failures: int,
@@ -156,6 +158,7 @@ class PipelineManager:
         self._session_factory = session_factory
         self._notification_sender_factory = notification_sender_factory
         self._get_auth_cookie = get_auth_cookie
+        self._get_user_agent = get_user_agent
         self._initial_reconnect_seconds = initial_reconnect_seconds
         self._max_reconnect_seconds = max_reconnect_seconds
         self._notify_after_failures = notify_after_failures
@@ -224,9 +227,14 @@ class PipelineManager:
         auth_cookie = await self._get_auth_cookie()
         if not auth_cookie:
             raise RuntimeError("VRChatの認証セッションがありません")
+        user_agent = await self._get_user_agent()
 
         url = f"{_PIPELINE_URL}?authToken={auth_cookie}"
-        async with websockets.connect(url, open_timeout=15, close_timeout=5) as ws:
+        # VRChatはUser-Agent未設定/デフォルト値のリクエストを403で拒否するため、
+        # websocketsライブラリの既定User-Agentではなく設定済みのVRChat用UAを明示する。
+        async with websockets.connect(
+            url, user_agent_header=user_agent, open_timeout=15, close_timeout=5
+        ) as ws:
             logger.info("VRChat Pipelineに接続しました")
             async for raw_message in ws:
                 await self._handle_message(raw_message)

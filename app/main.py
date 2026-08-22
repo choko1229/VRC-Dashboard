@@ -64,10 +64,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             cookies = await vrchat_session_service.get_decrypted_cookies(db, cipher)
             return cookies[0] if cookies else None
 
+    async def get_user_agent() -> str:
+        async with session_factory() as db:
+            return await app_config_service.get_vrchat_user_agent(db)
+
     pipeline_manager = PipelineManager(
         session_factory=session_factory,
         notification_sender_factory=notification_sender_factory,
         get_auth_cookie=get_auth_cookie,
+        get_user_agent=get_user_agent,
         initial_reconnect_seconds=settings_obj.pipeline_reconnect_initial_seconds,
         max_reconnect_seconds=settings_obj.pipeline_reconnect_max_seconds,
         notify_after_failures=settings_obj.pipeline_reconnect_notify_after_failures,

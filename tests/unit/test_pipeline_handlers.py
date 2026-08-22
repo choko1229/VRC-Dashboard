@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+import websockets
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -89,6 +93,7 @@ async def test_handle_message_dispatches_to_registered_handler(
         session_factory=db_session_factory,
         notification_sender_factory=lambda db: _fake_sender_factory(),
         get_auth_cookie=_none_cookie,
+        get_user_agent=_fake_user_agent,
         initial_reconnect_seconds=1,
         max_reconnect_seconds=1,
         notify_after_failures=1,
@@ -108,9 +113,59 @@ async def test_handle_message_dispatches_to_registered_handler(
         assert friend.is_online is False
 
 
+async def test_connect_and_listen_passes_configured_user_agent(
+    db_session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """VRChatはデフォルト(websocketsライブラリ既定)のUser-Agentを403で拒否するため、
+    設定済みのVRChat用UAがPipeline接続時にも渡されることを確認する。
+    """
+    captured: dict[str, Any] = {}
+
+    class _FakeConnection:
+        async def __aenter__(self) -> _FakeConnection:
+            return self
+
+        async def __aexit__(self, *exc_info: object) -> None:
+            return None
+
+        def __aiter__(self) -> _FakeConnection:
+            return self
+
+        async def __anext__(self) -> str:
+            raise StopAsyncIteration
+
+    def fake_connect(url: str, **kwargs: Any) -> _FakeConnection:
+        captured["url"] = url
+        captured["kwargs"] = kwargs
+        return _FakeConnection()
+
+    monkeypatch.setattr(websockets, "connect", fake_connect)
+
+    async def fake_auth_cookie() -> str | None:
+        return "dummy-auth-cookie"
+
+    manager = pipeline.PipelineManager(
+        session_factory=db_session_factory,
+        notification_sender_factory=lambda db: _fake_sender_factory(),
+        get_auth_cookie=fake_auth_cookie,
+        get_user_agent=_fake_user_agent,
+        initial_reconnect_seconds=1,
+        max_reconnect_seconds=1,
+        notify_after_failures=1,
+    )
+    await manager._connect_and_listen()
+
+    assert captured["kwargs"]["user_agent_header"] == "VRC-Dashboard-Test/1.0"
+
+
 async def _fake_sender_factory() -> FakeNotificationSender:
     return FakeNotificationSender()
 
 
 async def _none_cookie() -> str | None:
     return None
+
+
+async def _fake_user_agent() -> str:
+    return "VRC-Dashboard-Test/1.0"
