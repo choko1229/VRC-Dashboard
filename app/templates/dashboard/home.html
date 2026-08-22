@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}ダッシュボード{% endblock %}
+{% block content %}
+<header class="dashboard-header">
+    <h1 class="app-heading">こんにちは、{{ user.discord_global_name or user.discord_username }} さん</h1>
+    <form action="/auth/logout" method="post">
+        <button type="submit" class="btn btn-ghost">ログアウト</button>
+    </form>
+</header>
+
+<section class="dashboard-grid">
+    <article class="card theme-friends">
+        <h2>フレンド状況</h2>
+        <div hx-get="/partials/dashboard/friends-excerpt" hx-trigger="load, every 15s" hx-swap="innerHTML">
+            <p class="placeholder">読み込み中...</p>
+        </div>
+        <p><a href="/friends">フレンド一覧を見る</a> ｜ <a href="/settings/vrchat">VRChat連携設定</a></p>
+    </article>
+    <article class="card theme-avatars">
+        <h2>アバター準備状況</h2>
+        <div hx-get="/partials/dashboard/avatar-summary" hx-trigger="load" hx-swap="innerHTML">
+            <p class="placeholder">読み込み中...</p>
+        </div>
+        <p><a href="/avatars">アバター一覧を見る</a></p>
+    </article>
+    <article class="card theme-schedule">
+        <h2>今日の予定</h2>
+        <div hx-get="/partials/dashboard/schedule-today" hx-trigger="load" hx-swap="innerHTML">
+            <p class="placeholder">読み込み中...</p>
+        </div>
+        <p><a href="/schedule">カレンダーを見る</a></p>
+    </article>
+</section>
+{% endblock %}

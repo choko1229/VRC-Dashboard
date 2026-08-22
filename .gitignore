@@ -136,6 +136,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# App data (SQLite DB等の実行時データ)
+/data/
+
 # Spyder project settings
 .spyderproject
 .spyproject

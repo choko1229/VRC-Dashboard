@@ -1,0 +1,19 @@
+{% from "partials/icons.html" import icon_trash %}
+<ul id="allowlist-list" class="allowlist-list">
+    {% for entry in entries %}
+    <li>
+        <span>{{ entry.discord_user_id }}</span>
+        {% if entry.label %}<span class="text-muted">({{ entry.label }})</span>{% endif %}
+        <button
+            class="icon-btn"
+            title="削除"
+            hx-delete="/settings/allowlist/{{ entry.id }}"
+            hx-target="#allowlist-list"
+            hx-swap="outerHTML"
+            hx-confirm="このユーザーの許可を取り消しますか？"
+        >{{ icon_trash(16) }}</button>
+    </li>
+    {% else %}
+    <li class="placeholder">まだ登録されていません。</li>
+    {% endfor %}
+</ul>

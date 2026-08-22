@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}全般設定{% endblock %}
+{% block content %}
+<h1 class="app-heading">全般設定</h1>
+
+<h2>Discord OAuthアプリ</h2>
+<p class="text-muted">
+    ダッシュボードへのログインに使うDiscordアプリの情報です。
+    <a href="https://discord.com/developers/applications" target="_blank" rel="noopener">Discord Developer Portal</a>
+    のOAuth2設定に以下のリダイレクトURLを登録してください。
+</p>
+<p class="redirect-uri-box"><code>{{ redirect_uri }}</code></p>
+<div id="discord-oauth-form">
+    {% include "settings/_discord_oauth_form.html" %}
+</div>
+
+<h2>VRChat API 連絡先</h2>
+<p class="text-muted">
+    VRChatの非公式APIは、規約違反での凍結・レート制限回避のためUser-Agentに連絡先を
+    含めることが推奨されています。
+</p>
+<div id="vrchat-user-agent-form">
+    {% include "settings/_vrchat_user_agent_form.html" %}
+</div>
+
+<p><a href="/settings/vrchat">設定トップへ戻る</a> ｜ <a href="/">ダッシュボードへ戻る</a></p>
+{% endblock %}

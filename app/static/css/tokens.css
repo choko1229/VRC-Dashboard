@@ -1,0 +1,149 @@
+/* デザイントークン: フォント・カラー・スペーシング・タイプスケール・角丸スケール */
+
+@font-face {
+    font-family: "LINE Seed JP";
+    src: url("/static/fonts/LINESeedJP_OTF_Th.woff2") format("woff2");
+    font-weight: 100;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "LINE Seed JP";
+    src: url("/static/fonts/LINESeedJP_OTF_Rg.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "LINE Seed JP";
+    src: url("/static/fonts/LINESeedJP_OTF_Bd.woff2") format("woff2");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "LINE Seed JP";
+    src: url("/static/fonts/LINESeedJP_OTF_Eb.woff2") format("woff2");
+    font-weight: 800;
+    font-style: normal;
+    font-display: swap;
+}
+/* 見出し用フォント: ユルカ (FOT-Yuruka Std)。
+   商用フォントのため、Web埋め込み配布時のライセンス条件は別途要確認。 */
+@font-face {
+    font-family: "Yuruka";
+    src: url("/static/fonts/Yuruka.woff2") format("woff2");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    --font-body: "LINE Seed JP", system-ui, sans-serif;
+    --font-heading: "Yuruka", "LINE Seed JP", system-ui, sans-serif;
+
+    /* スペーシング（4px基準） */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+    --space-8: 64px;
+
+    /* タイプスケール（基準16px、モジュラー比1.25） */
+    --text-xs: 12px;
+    --text-sm: 14px;
+    --text-base: 16px;
+    --text-lg: 20px;
+    --text-xl: 24px;
+    --text-2xl: 32px;
+    --text-3xl: 40px;
+
+    /* 角丸スケール（丸みを帯びたポップな印象を出すため大きめ） */
+    --radius-sm: 8px;
+    --radius-md: 16px;
+    --radius-lg: 24px;
+    --radius-pill: 999px;
+
+    /* フレンド（青系） */
+    --color-friends-primary: #3B82F6;
+    --color-friends-hover: #2563EB;
+    --color-friends-bg-soft: #EFF6FF;
+    --color-friends-border: #BFDBFE;
+
+    /* アバター（緑系） */
+    --color-avatars-primary: #22C55E;
+    --color-avatars-hover: #16A34A;
+    --color-avatars-bg-soft: #F0FDF4;
+    --color-avatars-border: #BBF7D0;
+
+    /* 今日の予定（橙系） */
+    --color-schedule-primary: #F97316;
+    --color-schedule-hover: #EA580C;
+    --color-schedule-bg-soft: #FFF7ED;
+    --color-schedule-border: #FED7AA;
+
+    /* VRChatフレンドステータス色（公式アプリ準拠、テーマカラーとは独立） */
+    --color-status-online: #3BA55D;
+    --color-status-joinme: #3B82F6;
+    --color-status-askme: #F59E0B;
+    --color-status-busy: #EF4444;
+    --color-status-offline: #8B8B8B;
+
+    /* 汎用背景・文字色（ライトモード） */
+    --color-bg: #FAFAFA;
+    --color-surface: #FFFFFF;
+    --color-text: #1F2937;
+    --color-text-muted: #6B7280;
+    --color-border: #E5E7EB;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --color-friends-primary: #60A5FA;
+        --color-friends-hover: #3B82F6;
+        --color-friends-bg-soft: #1E3A5F;
+        --color-friends-border: #1E40AF;
+
+        --color-avatars-primary: #4ADE80;
+        --color-avatars-hover: #22C55E;
+        --color-avatars-bg-soft: #14361F;
+        --color-avatars-border: #166534;
+
+        --color-schedule-primary: #FB923C;
+        --color-schedule-hover: #F97316;
+        --color-schedule-bg-soft: #3A2312;
+        --color-schedule-border: #9A3412;
+
+        --color-bg: #111827;
+        --color-surface: #1F2937;
+        --color-text: #F3F4F6;
+        --color-text-muted: #9CA3AF;
+        --color-border: #374151;
+    }
+}
+
+:root[data-theme="dark"] {
+    --color-friends-primary: #60A5FA;
+    --color-friends-hover: #3B82F6;
+    --color-friends-bg-soft: #1E3A5F;
+    --color-friends-border: #1E40AF;
+
+    --color-avatars-primary: #4ADE80;
+    --color-avatars-hover: #22C55E;
+    --color-avatars-bg-soft: #14361F;
+    --color-avatars-border: #166534;
+
+    --color-schedule-primary: #FB923C;
+    --color-schedule-hover: #F97316;
+    --color-schedule-bg-soft: #3A2312;
+    --color-schedule-border: #9A3412;
+
+    --color-bg: #111827;
+    --color-surface: #1F2937;
+    --color-text: #F3F4F6;
+    --color-text-muted: #9CA3AF;
+    --color-border: #374151;
+}

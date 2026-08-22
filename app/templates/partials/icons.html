@@ -1,0 +1,107 @@
+{# 丸みを帯びたline/feather系アイコン。全て24x24、stroke=currentColorで色はCSS側から制御する。 #}
+
+{% macro icon_home(size=20) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <path d="M4 11.5 L12 4 L20 11.5"/>
+    <path d="M6 10 V19 a1 1 0 0 0 1 1 H17 a1 1 0 0 0 1 -1 V10"/>
+    <rect x="10" y="13" width="4" height="7" rx="1"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_users(size=20) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <circle cx="9" cy="8" r="3"/>
+    <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/>
+    <circle cx="17" cy="9" r="2.3"/>
+    <path d="M16 14.2c2.3.4 4 2.4 4 4.8"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_avatar(size=20) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <rect x="3" y="3" width="18" height="18" rx="4"/>
+    <circle cx="9" cy="10" r="2"/>
+    <path d="M4 18l5-4 4 3 3-3 4 4"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_calendar(size=20) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <rect x="3" y="5" width="18" height="16" rx="3"/>
+    <path d="M8 3v4M16 3v4M3 10h18"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_settings(size=20) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <circle cx="12" cy="12" r="3.2"/>
+    <path d="M12 3v2.4M12 18.6V21M21 12h-2.4M5.4 12H3M18 6l-1.7 1.7M7.7 16.3 6 18M18 18l-1.7-1.7M7.7 7.7 6 6"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_logout(size=20) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+    <path d="M16 17l5-5-5-5M21 12H9"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_sun(size=18) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <circle cx="12" cy="12" r="4.5"/>
+    <path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_moon(size=18) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_bell(size=18) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"/>
+    <path d="M10 19a2 2 0 0 0 4 0"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_plus(size=18) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" class="icon">
+    <path d="M12 5v14M5 12h14"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_trash(size=18) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <path d="M4 7h16"/>
+    <path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/>
+    <path d="M6 7l1 13.5A1.5 1.5 0 0 0 8.5 22h7a1.5 1.5 0 0 0 1.5-1.5L18 7"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_edit(size=18) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <path d="M4 20l.9-3.6L15.6 5.7a1.5 1.5 0 0 1 2.1 0l.6.6a1.5 1.5 0 0 1 0 2.1L7.6 19.1z"/>
+    <path d="M14 7l3 3"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_refresh(size=18) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <path d="M20 11A8 8 0 1 0 18.6 16"/>
+    <path d="M20 5v6h-6"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_chevron_left(size=18) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <path d="M15 5l-7 7 7 7"/>
+</svg>
+{% endmacro %}
+
+{% macro icon_chevron_right(size=18) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="icon">
+    <path d="M9 5l7 7-7 7"/>
+</svg>
+{% endmacro %}

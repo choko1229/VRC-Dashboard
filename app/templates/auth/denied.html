@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}ログインできません - VRC事前確認ダッシュボード{% endblock %}
+{% block content %}
+<section class="auth-card">
+    <h1 class="app-heading">ログインできません</h1>
+    <p>{{ reason }}</p>
+    <a class="btn" href="/login">ログイン画面へ戻る</a>
+</section>
+{% endblock %}

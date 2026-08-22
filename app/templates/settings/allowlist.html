@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}許可リスト設定{% endblock %}
+{% block content %}
+<h1 class="app-heading">ログイン許可リスト</h1>
+<p>ここに登録されたDiscordユーザーIDのみ、このダッシュボードにログインできます。</p>
+
+<form hx-post="/settings/allowlist" hx-target="#allowlist-list" hx-swap="outerHTML" class="allowlist-form">
+    <input type="text" name="discord_user_id" placeholder="Discordユーザー ID" required>
+    <input type="text" name="label" placeholder="表示名（任意）">
+    <button type="submit" class="btn">追加</button>
+</form>
+
+{% include "settings/_allowlist_list.html" %}
+
+<p><a href="/settings/vrchat">設定トップへ戻る</a> ｜ <a href="/">ダッシュボードへ戻る</a></p>
+{% endblock %}

@@ -1,0 +1,5 @@
+<form hx-post="/settings/general/vrchat-user-agent" hx-target="#vrchat-user-agent-form" hx-swap="innerHTML">
+    <input type="text" name="user_agent" placeholder="例: VRC-Dashboard/1.0 (you@example.com)" required value="{{ vrchat_user_agent }}" style="width:100%">
+    <button type="submit" class="btn">保存</button>
+</form>
+{% if saved %}<p class="success-text">保存しました。</p>{% endif %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}初回セットアップ{% endblock %}
+{% block content %}
+<section class="auth-card">
+    <h1 class="app-heading">初回セットアップ</h1>
+    <p>
+        ダッシュボードへのログインにはDiscord OAuth2アプリが必要です。
+        <a href="https://discord.com/developers/applications" target="_blank" rel="noopener">Discord Developer Portal</a>
+        で新規アプリケーションを作成し、以下のリダイレクトURLをOAuth2設定に登録してください。
+    </p>
+    <p class="redirect-uri-box"><code>{{ redirect_uri }}</code></p>
+
+    <form method="post" action="/setup/discord" class="setup-form">
+        <input type="text" name="client_id" placeholder="Client ID" required autocomplete="off">
+        <input type="password" name="client_secret" placeholder="Client Secret" required autocomplete="off">
+        <button type="submit" class="btn">保存してログイン画面へ</button>
+    </form>
+
+    <p class="text-muted">
+        保存後は<code>/settings/general</code>（ログイン後）から変更できます。
+        なお、初回ログインの前に、許可リストへ自分のDiscordユーザーIDを登録しておく必要があります
+        （<code>python -m scripts.seed_allowlist &lt;discord_user_id&gt;</code>）。
+        未登録のまま最初のログインを行うと拒否されます。
+    </p>
+</section>
+{% endblock %}

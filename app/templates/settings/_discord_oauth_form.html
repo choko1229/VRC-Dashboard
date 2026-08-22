@@ -1,0 +1,6 @@
+<form hx-post="/settings/general/discord-oauth" hx-target="#discord-oauth-form" hx-swap="innerHTML">
+    <input type="text" name="client_id" placeholder="Client ID" required value="{{ client_id }}">
+    <input type="password" name="client_secret" placeholder="Client Secret（変更する場合のみ入力）">
+    <button type="submit" class="btn">保存</button>
+</form>
+{% if saved %}<p class="success-text">保存しました。</p>{% endif %}

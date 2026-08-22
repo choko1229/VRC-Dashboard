@@ -1,0 +1,22 @@
+{% from "partials/icons.html" import icon_home, icon_users, icon_avatar, icon_calendar, icon_settings, icon_logout, icon_sun, icon_moon %}
+{% if request.cookies.get("vrc_dashboard_session") %}
+<nav class="app-nav">
+    <a href="/" class="nav-logo app-heading">VRCダッシュボード</a>
+    <div class="nav-links">
+        <a href="/" title="ダッシュボード" class="nav-link">{{ icon_home() }}<span>ホーム</span></a>
+        <a href="/friends" title="フレンド" class="nav-link">{{ icon_users() }}<span>フレンド</span></a>
+        <a href="/avatars" title="アバター" class="nav-link">{{ icon_avatar() }}<span>アバター</span></a>
+        <a href="/schedule" title="予定" class="nav-link">{{ icon_calendar() }}<span>予定</span></a>
+        <a href="/settings/vrchat" title="設定" class="nav-link">{{ icon_settings() }}<span>設定</span></a>
+    </div>
+    <div class="nav-actions">
+        <button type="button" class="icon-btn theme-toggle-btn" onclick="window.cycleTheme()" title="テーマ切替(OS連動/ライト/ダーク)">
+            <span class="theme-icon-light">{{ icon_sun() }}</span>
+            <span class="theme-icon-dark">{{ icon_moon() }}</span>
+        </button>
+        <form action="/auth/logout" method="post">
+            <button type="submit" class="icon-btn" title="ログアウト">{{ icon_logout() }}</button>
+        </form>
+    </div>
+</nav>
+{% endif %}

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+{% set theme_pref = request.cookies.get("theme_preference", "auto") %}
+<html lang="ja" {% if theme_pref != "auto" %}data-theme="{{ theme_pref }}"{% endif %}>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}VRC事前確認ダッシュボード{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/tokens.css">
+    <link rel="stylesheet" href="/static/css/base.css">
+    {% block extra_head %}{% endblock %}
+    <script src="/static/js/htmx.min.js" defer></script>
+    <script src="/static/js/theme-toggle.js" defer></script>
+</head>
+<body>
+    {% block body %}
+    {% include "partials/nav.html" %}
+    <main class="page-container">
+        {% block content %}{% endblock %}
+    </main>
+    {% endblock %}
+</body>
+</html>
