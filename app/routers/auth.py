@@ -110,7 +110,15 @@ async def discord_callback(
             status_code=502,
         )
 
-    if not await auth_service.is_allowlisted(db, discord_user.id):
+    is_bootstrap = await auth_service.allowlist_is_empty(db)
+    if is_bootstrap:
+        # 許可リストが空＝まだ誰もログインしたことがない初回起動状態。
+        # このユーザーを管理者として自動登録し、許可リストのセットアップ待ちを解消する。
+        await auth_service.bootstrap_first_admin(
+            db, discord_user.id, label=discord_user.global_name or discord_user.username
+        )
+        logger.info("初回ログインのため管理者として自動登録しました: %s", discord_user.id)
+    elif not await auth_service.is_allowlisted(db, discord_user.id):
         logger.info("許可リスト外のDiscordユーザーのログイン試行: %s", discord_user.id)
         response = templates.TemplateResponse(
             request,
@@ -121,7 +129,7 @@ async def discord_callback(
         response.delete_cookie(_OAUTH_STATE_COOKIE)
         return response
 
-    user = await auth_service.upsert_dashboard_user(db, discord_user)
+    user = await auth_service.upsert_dashboard_user(db, discord_user, is_admin=is_bootstrap)
     raw_session_token = await session_service.create_session(
         db,
         dashboard_user_id=user.id,

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}VRChatアカウント連携{% endblock %}
 {% block content %}
+{% set current_user = current_dashboard_user(request) %}
 <h1 class="app-heading">VRChatアカウント連携</h1>
 <div id="vrchat-panel">
     {% include "settings/_vrchat_panel.html" %}
@@ -8,7 +9,9 @@
 <p>
     <a href="/settings/general">全般設定</a> ｜
     <a href="/settings/notifications">通知設定</a> ｜
-    <a href="/settings/allowlist">ログイン許可リスト</a> ｜
+    {% if current_user and current_user.is_admin %}
+    <a href="/settings/allowlist">ユーザー管理</a> ｜
+    {% endif %}
     <a href="/">ダッシュボードへ戻る</a>
 </p>
 {% endblock %}

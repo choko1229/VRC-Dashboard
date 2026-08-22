@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}許可リスト設定{% endblock %}
+{% block title %}ユーザー管理{% endblock %}
 {% block content %}
-<h1 class="app-heading">ログイン許可リスト</h1>
-<p>ここに登録されたDiscordユーザーIDのみ、このダッシュボードにログインできます。</p>
+<h1 class="app-heading">ユーザー管理（管理者限定）</h1>
+<p>ここに登録されたDiscordユーザーIDのみ、このダッシュボードにログインできます。この画面は管理者のみ利用できます。</p>
 
 <form hx-post="/settings/allowlist" hx-target="#allowlist-list" hx-swap="outerHTML" class="allowlist-form">
     <input type="text" name="discord_user_id" placeholder="Discordユーザー ID" required>

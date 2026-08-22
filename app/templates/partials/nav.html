@@ -1,5 +1,6 @@
-{% from "partials/icons.html" import icon_home, icon_users, icon_avatar, icon_calendar, icon_settings, icon_logout, icon_sun, icon_moon %}
+{% from "partials/icons.html" import icon_home, icon_users, icon_avatar, icon_calendar, icon_settings, icon_logout, icon_sun, icon_moon, icon_admin %}
 {% if request.cookies.get("vrc_dashboard_session") %}
+{% set current_user = current_dashboard_user(request) %}
 <nav class="app-nav">
     <a href="/" class="nav-logo app-heading">VRCダッシュボード</a>
     <div class="nav-links">
@@ -8,6 +9,9 @@
         <a href="/avatars" title="アバター" class="nav-link">{{ icon_avatar() }}<span>アバター</span></a>
         <a href="/schedule" title="予定" class="nav-link">{{ icon_calendar() }}<span>予定</span></a>
         <a href="/settings/vrchat" title="設定" class="nav-link">{{ icon_settings() }}<span>設定</span></a>
+        {% if current_user and current_user.is_admin %}
+        <a href="/settings/allowlist" title="ユーザー管理" class="nav-link">{{ icon_admin() }}<span>管理</span></a>
+        {% endif %}
     </div>
     <div class="nav-actions">
         <button type="button" class="icon-btn theme-toggle-btn" onclick="window.cycleTheme()" title="テーマ切替(OS連動/ライト/ダーク)">

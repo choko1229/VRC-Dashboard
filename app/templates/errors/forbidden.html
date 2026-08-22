@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}権限がありません - VRC事前確認ダッシュボード{% endblock %}
+{% block content %}
+<section class="auth-card">
+    <h1 class="app-heading">権限がありません</h1>
+    <p>{{ reason }}</p>
+    <a class="btn" href="/">ダッシュボードへ戻る</a>
+</section>
+{% endblock %}

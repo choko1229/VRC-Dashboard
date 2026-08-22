@@ -16,6 +16,10 @@ class NotAuthenticatedError(Exception):
     """未ログイン、またはセッションが無効/失効している。"""
 
 
+class NotAdminError(Exception):
+    """管理者権限が必要な操作を非管理者が行おうとした。"""
+
+
 async def get_current_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -33,7 +37,18 @@ async def get_current_user(
     if user is None:
         raise NotAuthenticatedError
 
+    # テンプレート側（partials/nav.html）で管理者向けリンクの出し分けに使う。
+    request.state.dashboard_user = user
     return user
+
+
+async def get_current_admin_user(
+    current_user: DashboardUser = Depends(get_current_user),
+) -> DashboardUser:
+    """管理者権限を持つダッシュボードユーザーを取得する。非管理者ならNotAdminErrorを送出する。"""
+    if not current_user.is_admin:
+        raise NotAdminError
+    return current_user
 
 
 def get_cipher(settings: Settings = Depends(get_settings)) -> SecretCipher:

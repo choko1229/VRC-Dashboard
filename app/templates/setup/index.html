@@ -18,9 +18,8 @@
 
     <p class="text-muted">
         保存後は<code>/settings/general</code>（ログイン後）から変更できます。
-        なお、初回ログインの前に、許可リストへ自分のDiscordユーザーIDを登録しておく必要があります
-        （<code>python -m scripts.seed_allowlist &lt;discord_user_id&gt;</code>）。
-        未登録のまま最初のログインを行うと拒否されます。
+        なお、最初にログインしたDiscordアカウントは自動的に管理者として許可リストへ登録されます。
+        他のユーザーを招待する場合は、ログイン後の「管理」画面（<code>/settings/allowlist</code>）から追加してください。
     </p>
 </section>
 {% endblock %}

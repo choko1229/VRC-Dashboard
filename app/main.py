@@ -8,14 +8,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.deps import NotAuthenticatedError
+from app.core.deps import NotAdminError, NotAuthenticatedError
 from app.core.logging import configure_logging
 from app.core.security import get_secret_cipher
+from app.core.templating import templates
 from app.db.base import create_engine_and_sessionmaker
 from app.notifications.base import NotificationSender
 from app.notifications.composite import CompositeNotificationSender
@@ -124,6 +125,15 @@ def create_app() -> FastAPI:
         request: Request, exc: NotAuthenticatedError
     ) -> RedirectResponse:
         return RedirectResponse(url="/login", status_code=302)
+
+    @app.exception_handler(NotAdminError)
+    async def handle_not_admin(request: Request, exc: NotAdminError) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request,
+            "errors/forbidden.html",
+            {"reason": "この操作には管理者権限が必要です。"},
+            status_code=403,
+        )
 
     return app
 

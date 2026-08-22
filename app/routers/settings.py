@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
-from app.core.deps import get_cipher, get_current_user
+from app.core.deps import get_cipher, get_current_admin_user, get_current_user
 from app.core.security import SecretCipher
 from app.core.templating import templates
 from app.db.session import get_db
@@ -49,7 +49,11 @@ async def _render_allowlist_fragment(request: Request, db: AsyncSession) -> HTML
 
 
 @router.get("/allowlist", response_class=HTMLResponse)
-async def allowlist_page(request: Request, db: AsyncSession = Depends(get_db)) -> HTMLResponse:
+async def allowlist_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: DashboardUser = Depends(get_current_admin_user),
+) -> HTMLResponse:
     result = await db.execute(
         select(DiscordAllowlistEntry).order_by(DiscordAllowlistEntry.created_at)
     )
@@ -63,6 +67,7 @@ async def add_allowlist_entry(
     discord_user_id: str = Form(...),
     label: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
+    admin: DashboardUser = Depends(get_current_admin_user),
 ) -> HTMLResponse:
     existing = await db.execute(
         select(DiscordAllowlistEntry).where(
@@ -80,7 +85,7 @@ async def delete_allowlist_entry(
     request: Request,
     entry_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_user),
+    admin: DashboardUser = Depends(get_current_admin_user),
 ) -> HTMLResponse:
     entry = await db.get(DiscordAllowlistEntry, entry_id)
     if entry is not None:
