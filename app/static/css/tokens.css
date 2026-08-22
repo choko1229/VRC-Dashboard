@@ -28,19 +28,9 @@
     font-style: normal;
     font-display: swap;
 }
-/* 見出し用フォント: ユルカ (FOT-Yuruka Std)。
-   商用フォントのため、Web埋め込み配布時のライセンス条件は別途要確認。 */
-@font-face {
-    font-family: "Yuruka";
-    src: url("/static/fonts/Yuruka.woff2") format("woff2");
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-}
-
 :root {
     --font-body: "LINE Seed JP", system-ui, sans-serif;
-    --font-heading: "Yuruka", "LINE Seed JP", system-ui, sans-serif;
+    --font-heading: "LINE Seed JP", system-ui, sans-serif;
 
     /* スペーシング（4px基準） */
     --space-1: 4px;
