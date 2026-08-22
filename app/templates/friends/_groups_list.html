@@ -1,0 +1,14 @@
+{% from "partials/icons.html" import icon_trash %}
+<ul id="groups-list" class="groups-list">
+    {% for group in groups %}
+    <li>
+        {{ group.name }}
+        <span class="text-muted">({{ group.source }})</span>
+        {% if group.source == "local" %}
+        <button class="icon-btn" title="削除" hx-delete="/friends/groups/{{ group.id }}" hx-target="#groups-list" hx-swap="outerHTML" hx-confirm="このグループを削除しますか？">{{ icon_trash(16) }}</button>
+        {% endif %}
+    </li>
+    {% else %}
+    <li class="placeholder">グループがありません。</li>
+    {% endfor %}
+</ul>

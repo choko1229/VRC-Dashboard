@@ -1,0 +1,6 @@
+<form hx-post="/friends/{{ friend.id if friend else pref.friend_id }}/notifications" hx-target="#notification-form" hx-swap="innerHTML">
+    <label><input type="checkbox" name="notify_on_online" {% if pref and pref.notify_on_online %}checked{% endif %}> オンライン時に通知</label>
+    <label><input type="checkbox" name="notify_on_offline" {% if pref and pref.notify_on_offline %}checked{% endif %}> オフライン時に通知</label>
+    <label><input type="checkbox" name="notify_on_world_change" {% if pref and pref.notify_on_world_change %}checked{% endif %}> ワールド移動時に通知</label>
+    <button type="submit" class="btn">保存</button>
+</form>

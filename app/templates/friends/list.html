@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon_refresh %}
+{% block title %}フレンド一覧{% endblock %}
+{% block content %}
+<h1 class="app-heading">フレンド一覧</h1>
+
+<form class="filter-bar" hx-get="/friends/partials/list" hx-target="#friends-list" hx-swap="innerHTML">
+    <select name="group_id" hx-get="/friends/partials/list" hx-target="#friends-list" hx-swap="innerHTML" hx-trigger="change">
+        <option value="">すべてのグループ</option>
+        {% for group in groups %}
+        <option value="{{ group.id }}" {% if group.id == selected_group_id %}selected{% endif %}>{{ group.name }}</option>
+        {% endfor %}
+    </select>
+    <label>
+        <input type="checkbox" name="only_online" value="true" {% if only_online %}checked{% endif %}
+               hx-get="/friends/partials/list" hx-target="#friends-list" hx-swap="innerHTML" hx-trigger="change">
+        オンラインのみ
+    </label>
+</form>
+
+<p><a href="/friends/groups/manage">グループ管理</a> ｜
+<button class="btn btn-ghost" hx-post="/friends/sync" hx-target="#sync-result" hx-swap="innerHTML">{{ icon_refresh(16) }} VRChatと同期</button></p>
+<div id="sync-result"></div>
+
+<div id="friends-list">
+    {% include "friends/_list.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+<ul class="friend-groups-list">
+    {% for group in groups %}
+    <li>
+        {{ group.name }}
+        {% if group.id in friend_group_ids %}
+        <button class="btn btn-ghost" hx-delete="/friends/{{ friend.id }}/groups/{{ group.id }}" hx-target="#friend-groups" hx-swap="innerHTML">外す</button>
+        {% else %}
+        <button class="btn btn-ghost" hx-post="/friends/{{ friend.id }}/groups/{{ group.id }}" hx-target="#friend-groups" hx-swap="innerHTML">追加</button>
+        {% endif %}
+    </li>
+    {% else %}
+    <li class="placeholder">グループがありません。</li>
+    {% endfor %}
+</ul>

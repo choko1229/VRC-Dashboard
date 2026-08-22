@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}グループ管理{% endblock %}
+{% block content %}
+<h1 class="app-heading">フレンドグループ管理</h1>
+<p>VRChat側のお気に入りグループ(synced)は読み取り専用です。ダッシュボード独自のグループ(local)はここで追加・削除できます。</p>
+
+<form hx-post="/friends/groups" hx-target="#groups-list" hx-swap="innerHTML">
+    <input type="text" name="name" placeholder="新しいグループ名" required>
+    <button type="submit" class="btn">追加</button>
+</form>
+
+<div id="groups-list">
+    {% include "friends/_groups_list.html" %}
+</div>
+
+<p><a href="/friends">フレンド一覧へ戻る</a></p>
+{% endblock %}

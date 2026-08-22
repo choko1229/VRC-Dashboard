@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}VRChatアカウント連携{% endblock %}
+{% block content %}
+<h1 class="app-heading">VRChatアカウント連携</h1>
+<div id="vrchat-panel">
+    {% include "settings/_vrchat_panel.html" %}
+</div>
+<p>
+    <a href="/settings/general">全般設定</a> ｜
+    <a href="/settings/notifications">通知設定</a> ｜
+    <a href="/settings/allowlist">ログイン許可リスト</a> ｜
+    <a href="/">ダッシュボードへ戻る</a>
+</p>
+{% endblock %}

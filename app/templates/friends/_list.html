@@ -1,0 +1,16 @@
+<div class="friend-grid">
+    {% for friend in friends %}
+    <a class="friend-card" href="/friends/{{ friend.id }}">
+        <span class="status-dot status-{{ 'online' if friend.is_online else 'offline' }}"></span>
+        {% if friend.current_avatar_thumbnail_url %}
+        <img class="friend-thumb" src="{{ friend.current_avatar_thumbnail_url }}" alt="">
+        {% endif %}
+        <span class="friend-name">{{ friend.display_name }}</span>
+        <span class="friend-world">
+            {% if friend.is_online %}{{ friend.current_world_name or "不明なワールド" }}{% else %}オフライン{% endif %}
+        </span>
+    </a>
+    {% else %}
+    <p class="placeholder">フレンドがいません。「VRChatと同期」を試してください。</p>
+    {% endfor %}
+</div>

@@ -1,0 +1,24 @@
+{% if error_message %}<p class="error-text">{{ error_message }}</p>{% endif %}
+
+{% if mode == "connected" %}
+<p>VRChatアカウント「{{ display_name }}」と連携中です。</p>
+<form hx-post="/settings/vrchat/logout" hx-target="#vrchat-panel" hx-swap="innerHTML">
+    <button type="submit" class="btn btn-ghost">連携解除</button>
+</form>
+
+{% elif mode == "pending_2fa" %}
+<p>2段階認証コードを入力してください（方式: {{ methods|join(', ') }}）。</p>
+<form hx-post="/settings/vrchat/verify-2fa" hx-target="#vrchat-panel" hx-swap="innerHTML">
+    <input type="hidden" name="method" value="{{ methods[0] }}">
+    <input type="text" name="code" placeholder="認証コード" required autocomplete="one-time-code">
+    <button type="submit" class="btn">確定</button>
+</form>
+
+{% else %}
+<p>VRChatアカウントと未連携です。ログインしてください。</p>
+<form hx-post="/settings/vrchat/login" hx-target="#vrchat-panel" hx-swap="innerHTML">
+    <input type="text" name="username" placeholder="VRChatユーザー名" required autocomplete="username">
+    <input type="password" name="password" placeholder="パスワード" required autocomplete="current-password">
+    <button type="submit" class="btn">ログイン</button>
+</form>
+{% endif %}

@@ -1,0 +1,7 @@
+<ul class="excerpt-list">
+    {% for friend in friends %}
+    <li><a href="/friends/{{ friend.id }}">{{ friend.display_name }} - {{ friend.current_world_name or "不明なワールド" }}</a></li>
+    {% else %}
+    <li class="placeholder">オンラインのフレンドはいません。</li>
+    {% endfor %}
+</ul>

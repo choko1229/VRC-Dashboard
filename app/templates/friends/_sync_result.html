@@ -1,0 +1,4 @@
+<p class="{% if success %}success-text{% else %}error-text{% endif %}">{{ message }}</p>
+{% if success %}
+<script>window.location.reload();</script>
+{% endif %}
