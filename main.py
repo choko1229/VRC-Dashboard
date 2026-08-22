@@ -15,6 +15,8 @@ import logging
 import os
 import subprocess
 import sys
+from pathlib import Path
+from urllib.parse import urlparse
 
 import uvicorn
 
@@ -33,9 +35,27 @@ def _resolve_port() -> int:
     return get_settings().port
 
 
+def _ensure_sqlite_data_dir(database_url: str) -> None:
+    """SQLiteのDBファイル用ディレクトリが無ければ作成する。
+
+    Dockerイメージでは`RUN mkdir -p /app/data`で用意されているが、
+    Pterodactyl等コンテナを都度まっさらに展開する環境ではdata/が存在せず、
+    SQLiteは親ディレクトリを自動作成しないため`unable to open database file`
+    で失敗する。そのため起動時に明示的に作成する。
+    """
+    if not database_url.startswith("sqlite"):
+        return
+    db_path = urlparse(database_url).path.lstrip("/")
+    if not db_path:
+        return
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+
+
 def main() -> None:
     settings = get_settings()
     configure_logging(debug=settings.debug)
+
+    _ensure_sqlite_data_dir(settings.database_url)
 
     logger.info("DBマイグレーションを適用します")
     subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], check=True)
