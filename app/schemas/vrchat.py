@@ -110,10 +110,23 @@ class VRChatCalendarEvent(BaseModel):
 
 
 class VRChatWorld(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     id: str
     name: str
+    thumbnail_image_url: str | None = Field(default=None, alias="thumbnailImageUrl")
+
+
+class VRChatGroupSummary(BaseModel):
+    """`GET /users/{id}/groups` の1件（そのユーザーが公開しているVRChatグループ所属）。"""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    group_id: str = Field(alias="groupId")
+    name: str
+    short_code: str | None = Field(default=None, alias="shortCode")
+    icon_url: str | None = Field(default=None, alias="iconUrl")
+    member_count: int | None = Field(default=None, alias="memberCount")
 
 
 class VRChatInstance(BaseModel):

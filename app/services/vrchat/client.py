@@ -18,8 +18,10 @@ from app.schemas.vrchat import (
     VRChatCalendarEvent,
     VRChatFavorite,
     VRChatFavoriteGroup,
+    VRChatGroupSummary,
     VRChatInstance,
     VRChatUser,
+    VRChatWorld,
 )
 
 logger = logging.getLogger(__name__)
@@ -259,3 +261,21 @@ class VRChatClient:
         except VRChatAPIError:
             return None
         return VRChatInstance.model_validate(response.json())
+
+    async def get_user_groups(self, vrchat_user_id: str) -> list[VRChatGroupSummary]:
+        """指定ユーザーが公開しているVRChatグループ所属一覧を取得する（フレンド詳細用）。
+
+        エンドポイント: GET /users/{userId}/groups。
+        """
+        response = await self._request("GET", f"/users/{vrchat_user_id}/groups")
+        return [VRChatGroupSummary.model_validate(item) for item in response.json()]
+
+    async def get_user_worlds(self, vrchat_user_id: str) -> list[VRChatWorld]:
+        """指定ユーザーが公開しているワールド一覧を取得する（フレンド詳細用）。
+
+        エンドポイント: GET /users/{userId}/worlds。
+        """
+        response = await self._request(
+            "GET", f"/users/{vrchat_user_id}/worlds", params={"n": 100}
+        )
+        return [VRChatWorld.model_validate(item) for item in response.json()]

@@ -1,0 +1,50 @@
+{% if live_profile and live_profile.bio %}
+<h2>自己紹介</h2>
+<p class="friend-profile-bio">{{ live_profile.bio }}</p>
+{% endif %}
+
+{% if live_profile and live_profile.note %}
+<h2>自分が付けたノート</h2>
+<p class="friend-profile-bio">{{ live_profile.note }}</p>
+{% endif %}
+
+<h2>詳細情報</h2>
+<dl class="friend-info-grid">
+    <div><dt>ユーザーID</dt><dd>{{ friend.vrchat_user_id }}</dd></div>
+    {% if live_profile and live_profile.date_joined %}
+    <div><dt>アカウント作成日</dt><dd>{{ live_profile.date_joined }}</dd></div>
+    {% endif %}
+    <div><dt>ダッシュボードで初めて確認した日</dt><dd>{{ friend.created_at }}</dd></div>
+    {% if friend.last_seen_online_at %}
+    <div><dt>最後にオンラインを確認した日時</dt><dd>{{ friend.last_seen_online_at }}</dd></div>
+    {% endif %}
+    <div><dt>オンライン確認回数</dt><dd>{{ online_event_count }}回</dd></div>
+    {% if live_profile and platform_label(live_profile.last_platform) %}
+    <div><dt>最終プラットフォーム</dt><dd>{{ platform_label(live_profile.last_platform) }}</dd></div>
+    {% endif %}
+</dl>
+{% if not live_profile %}
+<p class="placeholder">
+    VRChatと連携していないか通信に失敗したため、自己紹介・アカウント作成日・会員ランク等の
+    追加情報は表示できません。
+</p>
+{% endif %}
+
+<h2>通知設定</h2>
+<div id="notification-form">
+    {% include "friends/_notification_form.html" %}
+</div>
+
+<h2>所属グループ（ダッシュボード独自）</h2>
+<div id="friend-groups">
+    {% include "friends/_friend_groups.html" %}
+</div>
+
+<h2>状態履歴（直近{{ events|length }}件）</h2>
+<ul class="history-list">
+    {% for event in events %}
+    <li>{{ event.occurred_at }} - {{ event.event_type }}{% if event.world_name %} ({{ event.world_name }}){% endif %}</li>
+    {% else %}
+    <li class="placeholder">履歴がありません。</li>
+    {% endfor %}
+</ul>

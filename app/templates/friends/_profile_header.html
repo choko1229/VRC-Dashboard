@@ -1,0 +1,16 @@
+<div class="friend-profile-header">
+    {% if profile_image_url %}
+    <img class="friend-profile-avatar" src="{{ profile_image_url }}" alt="">
+    {% else %}
+    <span class="friend-profile-avatar friend-card-avatar-placeholder"></span>
+    {% endif %}
+    <div class="friend-profile-header-text">
+        <h1 class="app-heading">{{ friend.display_name }}</h1>
+        <p class="friend-profile-status">
+            <span class="status-dot status-{{ 'online' if friend.is_online else 'offline' }}"></span>
+            {% if friend.is_online %}{{ friend.current_world_name or "不明なワールド" }}・{{ instance_privacy_label(friend.current_location) }}{% else %}オフライン{% endif %}
+        </p>
+        {% if friend.status_message %}<p class="friend-profile-status-message">{{ friend.status_message }}</p>{% endif %}
+        {% if trust_rank %}<span class="tag-chip tag-chip-friends">{{ trust_rank }}</span>{% endif %}
+    </div>
+</div>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, replace
 
@@ -195,6 +196,96 @@ async def friend_detail_page(
             request, "friends/not_found.html", status_code=404
         )
     return templates.TemplateResponse(request, "friends/detail.html", context)
+
+
+@router.get("/{friend_id}/tab/info", response_class=HTMLResponse)
+async def friend_tab_info(
+    request: Request,
+    friend_id: int,
+    db: AsyncSession = Depends(get_db),
+    cipher: SecretCipher = Depends(get_cipher),
+) -> HTMLResponse:
+    context = await _build_friend_detail_context(db, cipher, friend_id)
+    if context is None:
+        return templates.TemplateResponse(
+            request, "friends/_not_found_modal.html", status_code=404
+        )
+    return templates.TemplateResponse(request, "friends/_tab_info.html", context)
+
+
+@router.get("/{friend_id}/tab/groups", response_class=HTMLResponse)
+async def friend_tab_groups(
+    request: Request,
+    friend_id: int,
+    db: AsyncSession = Depends(get_db),
+    cipher: SecretCipher = Depends(get_cipher),
+) -> HTMLResponse:
+    friend = await db.get(Friend, friend_id)
+    if friend is None:
+        return templates.TemplateResponse(
+            request, "friends/_not_found_modal.html", status_code=404
+        )
+    overview = await friends_service.fetch_groups_overview(
+        db, cipher, vrchat_user_id=friend.vrchat_user_id
+    )
+    return templates.TemplateResponse(request, "friends/_tab_groups.html", {"overview": overview})
+
+
+@router.get("/{friend_id}/tab/worlds", response_class=HTMLResponse)
+async def friend_tab_worlds(
+    request: Request,
+    friend_id: int,
+    db: AsyncSession = Depends(get_db),
+    cipher: SecretCipher = Depends(get_cipher),
+) -> HTMLResponse:
+    friend = await db.get(Friend, friend_id)
+    if friend is None:
+        return templates.TemplateResponse(
+            request, "friends/_not_found_modal.html", status_code=404
+        )
+    worlds = await friends_service.fetch_user_worlds(
+        db, cipher, vrchat_user_id=friend.vrchat_user_id
+    )
+    return templates.TemplateResponse(request, "friends/_tab_worlds.html", {"worlds": worlds})
+
+
+@router.get("/{friend_id}/tab/activity", response_class=HTMLResponse)
+async def friend_tab_activity(
+    request: Request, friend_id: int, db: AsyncSession = Depends(get_db)
+) -> HTMLResponse:
+    friend = await db.get(Friend, friend_id)
+    if friend is None:
+        return templates.TemplateResponse(
+            request, "friends/_not_found_modal.html", status_code=404
+        )
+    stats = await friends_service.compute_activity_stats(db, friend_id)
+    return templates.TemplateResponse(request, "friends/_tab_activity.html", {"stats": stats})
+
+
+@router.get("/{friend_id}/tab/json", response_class=HTMLResponse)
+async def friend_tab_json(
+    request: Request,
+    friend_id: int,
+    db: AsyncSession = Depends(get_db),
+    cipher: SecretCipher = Depends(get_cipher),
+) -> HTMLResponse:
+    friend = await db.get(Friend, friend_id)
+    if friend is None:
+        return templates.TemplateResponse(
+            request, "friends/_not_found_modal.html", status_code=404
+        )
+    live_profile = await friends_service.fetch_live_profile(
+        db, cipher, vrchat_user_id=friend.vrchat_user_id
+    )
+    friend_dict = {
+        column.name: getattr(friend, column.name) for column in friend.__table__.columns
+    }
+    payload = {
+        "friend": friend_dict,
+        "live_profile": live_profile.model_dump() if live_profile else None,
+    }
+    json_text = json.dumps(payload, default=str, ensure_ascii=False, indent=2)
+    return templates.TemplateResponse(request, "friends/_tab_json.html", {"json_text": json_text})
 
 
 @router.post("/{friend_id}/notifications", response_class=HTMLResponse)

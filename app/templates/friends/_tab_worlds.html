@@ -1,0 +1,19 @@
+{% if worlds is none %}
+<p class="placeholder">
+    VRChatと連携していないか、非公開設定のため取得できませんでした。
+</p>
+{% elif not worlds %}
+<p class="placeholder">公開しているワールドがありません。</p>
+{% else %}
+<p class="text-muted">{{ worlds|length }}個のワールド</p>
+<div class="avatar-grid">
+    {% for world in worlds %}
+    <div class="avatar-card">
+        {% if world.thumbnail_image_url %}
+        <img class="avatar-thumb" src="{{ world.thumbnail_image_url }}" alt="">
+        {% endif %}
+        <span class="avatar-name">{{ world.name }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}

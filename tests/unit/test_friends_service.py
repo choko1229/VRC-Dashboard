@@ -202,3 +202,74 @@ async def test_fetch_live_profile_returns_none_without_vrchat_session(
             db, cipher, vrchat_user_id="usr_no_session"
         )
         assert profile is None
+
+
+async def test_fetch_groups_overview_returns_none_without_vrchat_session(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    cipher = SecretCipher(_TEST_FERNET_KEY)
+    async with db_session_factory() as db:
+        overview = await friends_service.fetch_groups_overview(
+            db, cipher, vrchat_user_id="usr_no_session"
+        )
+        assert overview is None
+
+
+async def test_fetch_user_worlds_returns_none_without_vrchat_session(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    cipher = SecretCipher(_TEST_FERNET_KEY)
+    async with db_session_factory() as db:
+        worlds = await friends_service.fetch_user_worlds(
+            db, cipher, vrchat_user_id="usr_no_session"
+        )
+        assert worlds is None
+
+
+async def test_compute_activity_stats_empty_when_no_events(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        friend = Friend(vrchat_user_id="usr_activity", display_name="Activity")
+        db.add(friend)
+        await db.commit()
+        await db.refresh(friend)
+
+        stats = await friends_service.compute_activity_stats(db, friend.id)
+        assert stats.total_events == 0
+        assert stats.most_active_weekday is None
+        assert stats.peak_hour_range is None
+        assert stats.max_count == 0
+
+
+async def test_compute_activity_stats_aggregates_online_events(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    from datetime import UTC, datetime
+
+    async with db_session_factory() as db:
+        friend = Friend(vrchat_user_id="usr_activity2", display_name="Activity2")
+        db.add(friend)
+        await db.commit()
+        await db.refresh(friend)
+
+        # 2026-08-23 13:00 UTC = 2026-08-23 22:00 JST（日曜日）
+        occurred_at = datetime(2026, 8, 23, 13, 0, tzinfo=UTC)
+        for _ in range(3):
+            db.add(
+                FriendPresenceEvent(
+                    friend_id=friend.id, event_type="online", occurred_at=occurred_at
+                )
+            )
+        db.add(
+            FriendPresenceEvent(
+                friend_id=friend.id, event_type="offline", occurred_at=occurred_at
+            )
+        )
+        await db.commit()
+
+        stats = await friends_service.compute_activity_stats(db, friend.id)
+        assert stats.total_events == 3
+        assert stats.most_active_weekday == "日曜日"
+        assert stats.peak_hour_range == "22:00-23:00"
+        assert stats.max_count == 3

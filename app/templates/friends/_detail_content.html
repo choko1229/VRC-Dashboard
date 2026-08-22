@@ -1,67 +1,18 @@
-<div class="friend-profile-header">
-    {% if profile_image_url %}
-    <img class="friend-profile-avatar" src="{{ profile_image_url }}" alt="">
-    {% else %}
-    <span class="friend-profile-avatar friend-card-avatar-placeholder"></span>
-    {% endif %}
-    <div class="friend-profile-header-text">
-        <h1 class="app-heading">{{ friend.display_name }}</h1>
-        <p class="friend-profile-status">
-            <span class="status-dot status-{{ 'online' if friend.is_online else 'offline' }}"></span>
-            {% if friend.is_online %}{{ friend.current_world_name or "不明なワールド" }}・{{ instance_privacy_label(friend.current_location) }}{% else %}オフライン{% endif %}
-        </p>
-        {% if friend.status_message %}<p class="friend-profile-status-message">{{ friend.status_message }}</p>{% endif %}
-        {% if trust_rank %}<span class="tag-chip tag-chip-friends">{{ trust_rank }}</span>{% endif %}
-    </div>
+{% include "friends/_profile_header.html" %}
+
+<div class="detail-tabs">
+    <button type="button" class="detail-tab active"
+            hx-get="/friends/{{ friend.id }}/tab/info" hx-target="#friend-detail-tab-content" hx-swap="innerHTML">情報</button>
+    <button type="button" class="detail-tab"
+            hx-get="/friends/{{ friend.id }}/tab/groups" hx-target="#friend-detail-tab-content" hx-swap="innerHTML">グループ</button>
+    <button type="button" class="detail-tab"
+            hx-get="/friends/{{ friend.id }}/tab/worlds" hx-target="#friend-detail-tab-content" hx-swap="innerHTML">ワールド</button>
+    <button type="button" class="detail-tab"
+            hx-get="/friends/{{ friend.id }}/tab/activity" hx-target="#friend-detail-tab-content" hx-swap="innerHTML">アクティビティ</button>
+    <button type="button" class="detail-tab"
+            hx-get="/friends/{{ friend.id }}/tab/json" hx-target="#friend-detail-tab-content" hx-swap="innerHTML">JSON</button>
 </div>
 
-{% if live_profile and live_profile.bio %}
-<h2>自己紹介</h2>
-<p class="friend-profile-bio">{{ live_profile.bio }}</p>
-{% endif %}
-
-{% if live_profile and live_profile.note %}
-<h2>自分が付けたノート</h2>
-<p class="friend-profile-bio">{{ live_profile.note }}</p>
-{% endif %}
-
-<h2>詳細情報</h2>
-<dl class="friend-info-grid">
-    <div><dt>ユーザーID</dt><dd>{{ friend.vrchat_user_id }}</dd></div>
-    {% if live_profile and live_profile.date_joined %}
-    <div><dt>アカウント作成日</dt><dd>{{ live_profile.date_joined }}</dd></div>
-    {% endif %}
-    <div><dt>ダッシュボードで初めて確認した日</dt><dd>{{ friend.created_at }}</dd></div>
-    {% if friend.last_seen_online_at %}
-    <div><dt>最後にオンラインを確認した日時</dt><dd>{{ friend.last_seen_online_at }}</dd></div>
-    {% endif %}
-    <div><dt>オンライン確認回数</dt><dd>{{ online_event_count }}回</dd></div>
-    {% if live_profile and platform_label(live_profile.last_platform) %}
-    <div><dt>最終プラットフォーム</dt><dd>{{ platform_label(live_profile.last_platform) }}</dd></div>
-    {% endif %}
-</dl>
-{% if not live_profile %}
-<p class="placeholder">
-    VRChatと連携していないか通信に失敗したため、自己紹介・アカウント作成日・会員ランク等の
-    追加情報は表示できません。
-</p>
-{% endif %}
-
-<h2>通知設定</h2>
-<div id="notification-form">
-    {% include "friends/_notification_form.html" %}
+<div id="friend-detail-tab-content">
+    {% include "friends/_tab_info.html" %}
 </div>
-
-<h2>所属グループ</h2>
-<div id="friend-groups">
-    {% include "friends/_friend_groups.html" %}
-</div>
-
-<h2>状態履歴（直近{{ events|length }}件）</h2>
-<ul class="history-list">
-    {% for event in events %}
-    <li>{{ event.occurred_at }} - {{ event.event_type }}{% if event.world_name %} ({{ event.world_name }}){% endif %}</li>
-    {% else %}
-    <li class="placeholder">履歴がありません。</li>
-    {% endfor %}
-</ul>

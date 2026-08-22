@@ -1,0 +1,25 @@
+{% if overview is none %}
+<p class="placeholder">
+    VRChatと連携していないか、非公開設定のため取得できませんでした。
+</p>
+{% elif not overview.friend_groups %}
+<p class="placeholder">公開しているグループがありません。</p>
+{% else %}
+<p class="text-muted">{{ overview.friend_groups|length }}個のグループ</p>
+<ul class="friend-vrchat-groups-list">
+    {% for group in overview.friend_groups %}
+    <li>
+        {% if group.icon_url %}
+        <img src="{{ group.icon_url }}" class="friend-vrchat-group-icon" alt="">
+        {% else %}
+        <span class="friend-vrchat-group-icon friend-card-avatar-placeholder"></span>
+        {% endif %}
+        <span>
+            {{ group.name }}
+            {% if group.member_count is not none %}<span class="text-muted">（{{ group.member_count }}人）</span>{% endif %}
+            {% if group.group_id in overview.common_group_ids %}<span class="tag-chip tag-chip-friends">共通</span>{% endif %}
+        </span>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}

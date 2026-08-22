@@ -7,7 +7,9 @@ REST APIによる初回ブートストラップ/手動再同期の両方から�
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,13 +24,77 @@ from app.notifications.base import NotificationPayload, NotificationSender
 from app.schemas.vrchat import (
     VRChatFavorite,
     VRChatFavoriteGroup,
+    VRChatGroupSummary,
     VRChatUser,
+    VRChatWorld,
     parse_world_id_from_location,
 )
 from app.services import app_config_service, vrchat_session_service
 from app.services.vrchat.client import VRChatAPIError, VRChatClient
 
 logger = logging.getLogger(__name__)
+
+_JST = ZoneInfo("Asia/Tokyo")
+_WEEKDAY_LABELS_JA = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
+
+
+@dataclass
+class ActivityStats:
+    """フレンド詳細「アクティビティ」タブ用の、曜日×時間帯のオンライン確認回数集計。"""
+
+    grid: list[list[int]]  # grid[曜日(0=月...6=日)][時(0-23)] = 確認回数
+    max_count: int
+    total_events: int
+    most_active_weekday: str | None
+    peak_hour_range: str | None
+
+
+async def compute_activity_stats(db: AsyncSession, friend_id: int) -> ActivityStats:
+    """保存済みのオンライン化イベント(friend_presence_event)から活動傾向を集計する。
+
+    表示はJST(Asia/Tokyo)基準（本アプリの想定利用者に合わせた固定変換。
+    ユーザーごとのタイムゾーン設定は現状持たない）。
+    """
+    result = await db.execute(
+        select(FriendPresenceEvent.occurred_at).where(
+            FriendPresenceEvent.friend_id == friend_id,
+            FriendPresenceEvent.event_type == "online",
+        )
+    )
+    occurred_ats = result.scalars().all()
+
+    grid = [[0] * 24 for _ in range(7)]
+    for occurred_at in occurred_ats:
+        # SQLiteはタイムゾーン情報を保持しないため、読み出し時naiveになったdatetimeは
+        # 書き込み時と同じUTCとして扱ってから変換する（app.services.session_service参照）。
+        aware = occurred_at if occurred_at.tzinfo is not None else occurred_at.replace(tzinfo=UTC)
+        local = aware.astimezone(_JST)
+        grid[local.weekday()][local.hour] += 1
+
+    total_events = len(occurred_ats)
+    if total_events == 0:
+        return ActivityStats(
+            grid=grid,
+            max_count=0,
+            total_events=0,
+            most_active_weekday=None,
+            peak_hour_range=None,
+        )
+
+    weekday_totals = [sum(row) for row in grid]
+    most_active_weekday = _WEEKDAY_LABELS_JA[weekday_totals.index(max(weekday_totals))]
+
+    hour_totals = [sum(grid[w][h] for w in range(7)) for h in range(24)]
+    peak_hour = hour_totals.index(max(hour_totals))
+    peak_hour_range = f"{peak_hour:02d}:00-{(peak_hour + 1) % 24:02d}:00"
+
+    return ActivityStats(
+        grid=grid,
+        max_count=max(max(row) for row in grid),
+        total_events=total_events,
+        most_active_weekday=most_active_weekday,
+        peak_hour_range=peak_hour_range,
+    )
 
 
 async def _get_or_create_friend(db: AsyncSession, vrchat_user_id: str, display_name: str) -> Friend:
@@ -323,6 +389,23 @@ async def handle_friend_status_update(db: AsyncSession, *, vrchat_user: VRChatUs
     await db.commit()
 
 
+async def _build_client_from_session(
+    db: AsyncSession, cipher: SecretCipher
+) -> VRChatClient | None:
+    """保存済みのVRChatセッションからAPIクライアントを組み立てる。未連携ならNone。
+
+    呼び出し側は必ずtry/finallyで`close()`すること。
+    """
+    cookies = await vrchat_session_service.get_decrypted_cookies(db, cipher)
+    if cookies is None:
+        return None
+    auth_cookie, two_factor_cookie = cookies
+    user_agent = await app_config_service.get_vrchat_user_agent(db)
+    return VRChatClient(
+        user_agent=user_agent, auth_cookie=auth_cookie, two_factor_cookie=two_factor_cookie
+    )
+
+
 async def fetch_live_profile(
     db: AsyncSession, cipher: SecretCipher, *, vrchat_user_id: str
 ) -> VRChatUser | None:
@@ -330,18 +413,66 @@ async def fetch_live_profile(
     VRChatから都度取得する。VRChat未連携時や通信失敗時はNoneを返し、呼び出し側は
     ローカルに保存済みの情報のみで表示を続行する。
     """
-    cookies = await vrchat_session_service.get_decrypted_cookies(db, cipher)
-    if cookies is None:
+    client = await _build_client_from_session(db, cipher)
+    if client is None:
         return None
-    auth_cookie, two_factor_cookie = cookies
-    user_agent = await app_config_service.get_vrchat_user_agent(db)
-    client = VRChatClient(
-        user_agent=user_agent, auth_cookie=auth_cookie, two_factor_cookie=two_factor_cookie
-    )
     try:
         return await client.get_user(vrchat_user_id)
     except VRChatAPIError:
         logger.warning("フレンドのフルプロフィール取得に失敗しました: %s", vrchat_user_id)
+        return None
+    finally:
+        await client.close()
+
+
+@dataclass
+class GroupsOverview:
+    """フレンド詳細「グループ」タブ用。フレンドが公開しているグループと、
+    自分（ダッシュボード操作者）とのグループIDの重なりをまとめたもの。
+    """
+
+    friend_groups: list[VRChatGroupSummary]
+    common_group_ids: set[str]
+
+
+async def fetch_groups_overview(
+    db: AsyncSession, cipher: SecretCipher, *, vrchat_user_id: str
+) -> GroupsOverview | None:
+    client = await _build_client_from_session(db, cipher)
+    if client is None:
+        return None
+    try:
+        friend_groups = await client.get_user_groups(vrchat_user_id)
+
+        common_group_ids: set[str] = set()
+        session = await vrchat_session_service.get_active_session(db)
+        if session is not None:
+            try:
+                self_groups = await client.get_user_groups(session.vrchat_user_id)
+                self_group_ids = {g.group_id for g in self_groups}
+                common_group_ids = {g.group_id for g in friend_groups} & self_group_ids
+            except VRChatAPIError:
+                pass  # 自分のグループ一覧が取れなくても、相手のグループ一覧は表示を続ける
+
+        return GroupsOverview(friend_groups=friend_groups, common_group_ids=common_group_ids)
+    except VRChatAPIError:
+        logger.warning("フレンドのグループ一覧取得に失敗しました: %s", vrchat_user_id)
+        return None
+    finally:
+        await client.close()
+
+
+async def fetch_user_worlds(
+    db: AsyncSession, cipher: SecretCipher, *, vrchat_user_id: str
+) -> list[VRChatWorld] | None:
+    """フレンドが公開しているワールド一覧を取得する。取得不可の場合はNone。"""
+    client = await _build_client_from_session(db, cipher)
+    if client is None:
+        return None
+    try:
+        return await client.get_user_worlds(vrchat_user_id)
+    except VRChatAPIError:
+        logger.warning("フレンドのワールド一覧取得に失敗しました: %s", vrchat_user_id)
         return None
     finally:
         await client.close()

@@ -17,6 +17,9 @@ dependencies = [
     "jinja2>=3.1.4",
     "python-multipart>=0.0.12",
     "pywebpush>=2.0.1",
+    # zoneinfoのIANAタイムゾーンDBを提供する（Windowsやslim系Dockerイメージ等、
+    # OSにtzdataが無い環境でもZoneInfo("Asia/Tokyo")が解決できるようにするため）。
+    "tzdata>=2024.1",
 ]
 
 [dependency-groups]
