@@ -8,7 +8,7 @@ from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
 from app.models.dashboard_user import DashboardUser
-from app.schemas.vrchat import parse_instance_privacy_label
+from app.schemas.vrchat import parse_instance_privacy_label, parse_instance_region_flag
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -31,4 +31,5 @@ def status_dot_class(activity_status: str) -> str:
 
 templates.env.globals["current_dashboard_user"] = current_dashboard_user
 templates.env.globals["instance_privacy_label"] = parse_instance_privacy_label
+templates.env.globals["instance_region_flag"] = parse_instance_region_flag
 templates.env.globals["status_dot_class"] = status_dot_class

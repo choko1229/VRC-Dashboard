@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_cipher, get_current_user
@@ -18,7 +20,13 @@ from app.models.friend_group import FriendGroup
 from app.models.friend_group_membership import FriendGroupMembership
 from app.models.friend_notification_pref import FriendNotificationPref
 from app.models.friend_presence_event import FriendPresenceEvent
-from app.services import app_config_service, vrchat_session_service, vrchat_sync_service
+from app.services import (
+    app_config_service,
+    sidebar_service,
+    vrchat_session_service,
+    vrchat_sync_service,
+)
+from app.services.sidebar_service import SameInstanceGroup
 from app.services.vrchat.client import VRChatAPIError, VRChatClient
 
 logger = logging.getLogger(__name__)
@@ -27,18 +35,41 @@ router = APIRouter(prefix="/friends", dependencies=[Depends(get_current_user)])
 
 _HISTORY_PAGE_SIZE = 50
 
+FilterTab = Literal["online", "favorites", "active", "offline"]
+_VALID_FILTER_TABS: set[str] = {"online", "favorites", "active", "offline"}
+
+
+def _normalize_filter_tab(value: str) -> FilterTab:
+    return value if value in _VALID_FILTER_TABS else "online"  # type: ignore[return-value]
+
 
 async def _fetch_friends(
-    db: AsyncSession, *, group_id: int | None, only_online: bool
+    db: AsyncSession, *, filter_tab: FilterTab, group_id: int | None, q: str | None
 ) -> list[Friend]:
     query = select(Friend)
-    if group_id is not None:
+    if filter_tab == "online":
+        query = query.where(Friend.online_state == "online")
+    elif filter_tab == "active":
+        query = query.where(Friend.online_state == "active")
+    elif filter_tab == "offline":
+        query = query.where(Friend.online_state == "offline")
+    elif filter_tab == "favorites":
         query = query.join(
             FriendGroupMembership, FriendGroupMembership.friend_id == Friend.id
-        ).where(FriendGroupMembership.group_id == group_id)
-    if only_online:
-        query = query.where(Friend.is_online.is_(True))
-    query = query.order_by(Friend.is_online.desc(), Friend.display_name)
+        )
+        if group_id is not None:
+            query = query.where(FriendGroupMembership.group_id == group_id)
+
+    if q:
+        query = query.where(Friend.display_name.ilike(f"%{q}%"))
+
+    # どのタブでも、状態が混在する場合はオフラインを一番下に回す。
+    online_state_priority = case(
+        (Friend.online_state == "online", 0),
+        (Friend.online_state == "active", 1),
+        else_=2,
+    )
+    query = query.order_by(online_state_priority, Friend.display_name)
     result = await db.execute(query)
     return list(result.scalars().unique().all())
 
@@ -59,23 +90,67 @@ async def _fetch_friend_group_ids(db: AsyncSession, friend_id: int) -> set[int]:
     return set(result.scalars().all())
 
 
+async def _fetch_friends_with_same_instance(
+    db: AsyncSession,
+    cipher: SecretCipher,
+    *,
+    filter_tab: FilterTab,
+    group_id: int | None,
+    q: str | None,
+) -> tuple[list[Friend], SameInstanceGroup | None]:
+    """「オンライン」タブの場合のみ、自分と同じインスタンスにいるフレンドを別枠にまとめる。
+
+    同じインスタンス枠に入ったフレンドは、下の一覧から重複しないよう除外する。
+    """
+    friends = await _fetch_friends(db, filter_tab=filter_tab, group_id=group_id, q=q)
+    if filter_tab != "online":
+        return friends, None
+
+    groups = await sidebar_service.get_friend_sidebar_groups(db, cipher)
+    same_instance = groups.same_instance
+    if same_instance is None:
+        return friends, None
+
+    if q:
+        query_lower = q.lower()
+        matched = [f for f in same_instance.friends if query_lower in f.display_name.lower()]
+        same_instance = (
+            replace(same_instance, friend_count=len(matched), friends=matched)
+            if matched
+            else None
+        )
+        if same_instance is None:
+            return friends, None
+
+    same_instance_ids = {f.id for f in same_instance.friends}
+    remaining = [f for f in friends if f.id not in same_instance_ids]
+    return remaining, same_instance
+
+
 @router.get("", response_class=HTMLResponse)
 async def friends_page(
     request: Request,
+    filter_tab: str = "online",
     group_id: int | None = None,
-    only_online: bool = False,
+    q: str | None = None,
     db: AsyncSession = Depends(get_db),
+    cipher: SecretCipher = Depends(get_cipher),
 ) -> HTMLResponse:
-    friends = await _fetch_friends(db, group_id=group_id, only_online=only_online)
+    tab = _normalize_filter_tab(filter_tab)
+    friends, same_instance = await _fetch_friends_with_same_instance(
+        db, cipher, filter_tab=tab, group_id=group_id, q=q
+    )
     groups = await _fetch_groups(db)
     return templates.TemplateResponse(
         request,
         "friends/list.html",
         {
             "friends": friends,
+            "same_instance": same_instance,
             "groups": groups,
             "selected_group_id": group_id,
-            "only_online": only_online,
+            "filter_tab": tab,
+            "q": q or "",
         },
     )
 
@@ -83,12 +158,29 @@ async def friends_page(
 @router.get("/partials/list", response_class=HTMLResponse)
 async def friends_list_partial(
     request: Request,
+    filter_tab: str = "online",
     group_id: int | None = None,
-    only_online: bool = False,
+    q: str | None = None,
     db: AsyncSession = Depends(get_db),
+    cipher: SecretCipher = Depends(get_cipher),
 ) -> HTMLResponse:
-    friends = await _fetch_friends(db, group_id=group_id, only_online=only_online)
-    return templates.TemplateResponse(request, "friends/_list.html", {"friends": friends})
+    tab = _normalize_filter_tab(filter_tab)
+    friends, same_instance = await _fetch_friends_with_same_instance(
+        db, cipher, filter_tab=tab, group_id=group_id, q=q
+    )
+    groups = await _fetch_groups(db)
+    return templates.TemplateResponse(
+        request,
+        "friends/_panel.html",
+        {
+            "friends": friends,
+            "same_instance": same_instance,
+            "groups": groups,
+            "selected_group_id": group_id,
+            "filter_tab": tab,
+            "q": q or "",
+        },
+    )
 
 
 @router.get("/{friend_id}", response_class=HTMLResponse)
@@ -239,9 +331,8 @@ async def manual_sync(
     finally:
         await client.close()
 
-    friends = await _fetch_friends(db, group_id=None, only_online=False)
     return templates.TemplateResponse(
         request,
         "friends/_sync_result.html",
-        {"success": True, "message": "同期が完了しました。", "friends": friends},
+        {"success": True, "message": "同期が完了しました。"},
     )

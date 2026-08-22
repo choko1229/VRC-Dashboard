@@ -68,6 +68,7 @@ async def bootstrap_friends_from_vrchat(
         friend.display_name = vrchat_user.display_name
         friend.is_online = is_online
         friend.activity_status = vrchat_user.status
+        friend.status_message = vrchat_user.status_description
         if is_online:
             # VRChat APIが"state"を返さない/想定外の値の場合でも、is_online=Trueである以上
             # 最低限"online"扱いにする（"same instance"判定等が壊れないようにする）。
@@ -313,6 +314,7 @@ async def handle_friend_status_update(db: AsyncSession, *, vrchat_user: VRChatUs
     friend = await _get_or_create_friend(db, vrchat_user.id, vrchat_user.display_name)
     friend.display_name = vrchat_user.display_name
     friend.activity_status = vrchat_user.status
+    friend.status_message = vrchat_user.status_description
     friend.current_avatar_thumbnail_url = vrchat_user.current_avatar_thumbnail_image_url
     friend.last_updated_at = datetime.now(UTC)
     await db.commit()

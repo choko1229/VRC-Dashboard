@@ -1,16 +1,44 @@
-<div class="friend-grid">
-    {% for friend in friends %}
-    <a class="friend-card" href="/friends/{{ friend.id }}">
-        <span class="status-dot status-{{ 'online' if friend.is_online else 'offline' }}"></span>
+{% from "partials/icons.html" import icon_edit %}
+{% macro friend_card(friend) %}
+<a class="friend-card-v2" href="/friends/{{ friend.id }}">
+    <span class="friend-card-avatar-wrap">
         {% if friend.current_avatar_thumbnail_url %}
-        <img class="friend-thumb" src="{{ friend.current_avatar_thumbnail_url }}" alt="">
+        <img class="friend-card-avatar" src="{{ friend.current_avatar_thumbnail_url }}" alt="">
+        {% else %}
+        <span class="friend-card-avatar friend-card-avatar-placeholder"></span>
         {% endif %}
-        <span class="friend-name">{{ friend.display_name }}</span>
-        <span class="friend-world">
-            {% if friend.is_online %}{{ friend.current_world_name or "不明なワールド" }}{% else %}オフライン{% endif %}
+        <span class="status-dot status-{{ status_dot_class(friend.activity_status) }} friend-card-status-dot"></span>
+    </span>
+    <span class="friend-card-body">
+        <span class="friend-card-name">{{ friend.display_name }}</span>
+        {% if friend.status_message %}
+        <span class="friend-card-status-message">{{ icon_edit(12) }}{{ friend.status_message }}</span>
+        {% endif %}
+        <span class="friend-card-location">
+            {% if friend.online_state == "offline" %}オフライン
+            {% elif friend.current_world_name %}{{ instance_region_flag(friend.current_location) }} {{ friend.current_world_name }}・{{ instance_privacy_label(friend.current_location) }}
+            {% else %}プライベート{% endif %}
         </span>
-    </a>
-    {% else %}
+    </span>
+</a>
+{% endmacro %}
+
+{% if same_instance %}
+<div class="friend-instance-header">
+    <span>{{ instance_region_flag(same_instance.friends[0].current_location) }}</span>
+    <span>
+        {{ same_instance.world_name or "不明なワールド" }}・{{ same_instance.privacy_label }}
+        ({{ same_instance.friend_count }}{% if same_instance.instance_total is not none %}/{{ same_instance.instance_total }}{% endif %})
+    </span>
+</div>
+<div class="friend-card-grid">
+    {% for friend in same_instance.friends %}{{ friend_card(friend) }}{% endfor %}
+</div>
+{% endif %}
+
+<div class="friend-card-grid">
+    {% for friend in friends %}{{ friend_card(friend) }}{% endfor %}
+    {% if not friends and not same_instance %}
     <p class="placeholder">フレンドがいません。「VRChatと同期」を試してください。</p>
-    {% endfor %}
+    {% endif %}
 </div>

@@ -28,6 +28,8 @@ class Friend(Base):
     # activity_statusとは別概念（VRChat APIの"state"フィールドに対応）。
     # サイドバーの「同じインスタンス/オンライン/アクティブ」区分に使う。
     online_state: Mapped[str] = mapped_column(String(10), default="offline")
+    # VRChatのステータスメッセージ（ユーザーが自由入力する一言）。
+    status_message: Mapped[str | None] = mapped_column(String(255), default=None)
     current_world_id: Mapped[str | None] = mapped_column(String(100), default=None)
     current_world_name: Mapped[str | None] = mapped_column(String(255), default=None)
     current_location: Mapped[str | None] = mapped_column(String(150), default=None)

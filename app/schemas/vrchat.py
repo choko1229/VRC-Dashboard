@@ -6,9 +6,18 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
+
+_REGION_FLAGS: dict[str, str] = {
+    "jp": "🇯🇵",
+    "us": "🇺🇸",
+    "use": "🇺🇸",
+    "usw": "🇺🇸",
+    "eu": "🇪🇺",
+}
 
 
 class VRChatUser(BaseModel):
@@ -136,3 +145,16 @@ def parse_instance_privacy_label(location: str | None) -> str:
             return "招待+"
         return "招待"
     return "パブリック"
+
+
+def parse_instance_region_flag(location: str | None) -> str:
+    """locationの"~region(xx)"タグからサーバーリージョンの国旗絵文字を推定する。
+
+    タグが無い/未知のリージョンの場合は地球アイコンにフォールバックする。
+    """
+    if location is None:
+        return "🌐"
+    match = re.search(r"~region\(([a-zA-Z]+)\)", location)
+    if match is None:
+        return "🌐"
+    return _REGION_FLAGS.get(match.group(1).lower(), "🌐")
