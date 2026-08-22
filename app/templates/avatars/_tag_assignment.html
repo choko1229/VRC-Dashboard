@@ -1,0 +1,17 @@
+<ul class="tag-assignment-list">
+    {% for tag in tags %}
+    <li>
+        {{ tag.name }}
+        {% if tag.id in avatar_tag_ids %}
+        <button class="btn btn-ghost" hx-delete="/avatars/{{ avatar_id }}/tags/{{ tag.id }}" hx-target="#tag-assignment" hx-swap="innerHTML">外す</button>
+        {% else %}
+        <form style="display:inline" hx-post="/avatars/{{ avatar_id }}/tags" hx-target="#tag-assignment" hx-swap="innerHTML">
+            <input type="hidden" name="tag_id" value="{{ tag.id }}">
+            <button type="submit" class="btn btn-ghost">付ける</button>
+        </form>
+        {% endif %}
+    </li>
+    {% else %}
+    <li class="placeholder">タグがありません。<a href="/avatars/tags/manage">タグ管理</a>から作成してください。</li>
+    {% endfor %}
+</ul>

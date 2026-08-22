@@ -1,0 +1,4 @@
+<form hx-patch="/avatars/{{ avatar.id }}/notes" hx-target="#notes-form" hx-swap="innerHTML">
+    <textarea name="notes" rows="4" placeholder="自由メモ" style="width:100%">{{ avatar.notes or "" }}</textarea>
+    <button type="submit" class="btn">保存</button>
+</form>

@@ -1,0 +1,11 @@
+{% from "partials/icons.html" import icon_trash %}
+<ul id="tags-list" class="tags-list">
+    {% for tag in tags %}
+    <li>
+        <span class="tag-chip" {% if tag.color %}style="background-color:{{ tag.color }}"{% endif %}>{{ tag.name }}</span>
+        <button class="icon-btn" title="削除" hx-delete="/avatars/tags/{{ tag.id }}" hx-target="#tags-list" hx-swap="outerHTML" hx-confirm="このタグを削除しますか？（アバターへの付与も解除されます）">{{ icon_trash(16) }}</button>
+    </li>
+    {% else %}
+    <li class="placeholder">タグがありません。</li>
+    {% endfor %}
+</ul>

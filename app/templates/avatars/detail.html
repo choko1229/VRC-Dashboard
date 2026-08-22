@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ avatar.name }} - アバター{% endblock %}
+{% block content %}
+<h1 class="app-heading">{{ avatar.name }}</h1>
+{% if avatar.thumbnail_image_url %}
+<img class="avatar-thumb-large" src="{{ avatar.thumbnail_image_url }}" alt="">
+{% endif %}
+<p>公開設定: {{ avatar.release_status }} ｜ パフォーマンスランク: {{ avatar.performance_rank or "不明" }}</p>
+
+<h2>タグ</h2>
+<div id="tag-assignment">
+    {% include "avatars/_tag_assignment.html" %}
+</div>
+
+<h2>メモ</h2>
+<div id="notes-form">
+    {% include "avatars/_notes_form.html" %}
+</div>
+
+<p><a href="/avatars">アバター一覧へ戻る</a></p>
+{% endblock %}

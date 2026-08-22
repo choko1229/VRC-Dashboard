@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon_refresh %}
+{% block title %}アバター一覧{% endblock %}
+{% block content %}
+<h1 class="app-heading">アバター一覧</h1>
+
+<form hx-get="/avatars/partials/list" hx-target="#avatars-list" hx-swap="innerHTML">
+    <select name="tag_id" hx-get="/avatars/partials/list" hx-target="#avatars-list" hx-swap="innerHTML" hx-trigger="change">
+        <option value="">すべてのタグ</option>
+        {% for tag in tags %}
+        <option value="{{ tag.id }}" {% if tag.id == selected_tag_id %}selected{% endif %}>{{ tag.name }}</option>
+        {% endfor %}
+    </select>
+</form>
+
+<p><a href="/avatars/tags/manage">タグ管理</a> ｜
+<button class="btn btn-ghost" hx-post="/avatars/sync" hx-target="#sync-result" hx-swap="innerHTML">{{ icon_refresh(16) }} VRChatと同期</button></p>
+<div id="sync-result"></div>
+
+<div id="avatars-list">
+    {% include "avatars/_list.html" %}
+</div>
+{% endblock %}
