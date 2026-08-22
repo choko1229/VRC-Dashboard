@@ -1,0 +1,6 @@
+<form hx-post="/settings/notifications/discord" hx-target="#discord-notify-form" hx-swap="innerHTML">
+    <input type="text" name="bot_url" placeholder="BOTのURL (例: https://bot.example.com)" value="{{ bot_url }}">
+    <input type="password" name="shared_secret" placeholder="{{ '設定済み（変更する場合のみ入力）' if secret_configured else '共有シークレット' }}">
+    <button type="submit" class="btn">保存</button>
+</form>
+{% if saved %}<p class="success-text">保存しました。</p>{% endif %}
