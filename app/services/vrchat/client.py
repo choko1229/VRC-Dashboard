@@ -30,6 +30,17 @@ _BASE_URL = "https://api.vrchat.cloud/api/1"
 TwoFactorMethod = Literal["totp", "emailOtp"]
 
 
+def _encode_instance_location(location: str) -> str:
+    """`GET /instances/{location}` のパスパラメータ用にlocationをエンコードする。
+
+    VRChatの公式ドキュメント（vrchat.community/openapi/get-instance）の例では、
+    `:`・`~`・`(`・`)`はエンコードせずそのままパスに含める
+    （例: `wrld_xxx:12345~region(eu)~nonce(...)`）。これらを`%3A`等に
+    percent-encodeすると400 Bad Requestが返る（本番環境で確認済み）。
+    """
+    return quote(location, safe=":()~")
+
+
 class VRChatAPIError(Exception):
     """VRChat APIとの通信で予期しないエラーが発生した。"""
 
@@ -256,8 +267,9 @@ class VRChatClient:
         エンドポイント: GET /instances/{location}。非公開インスタンス等で取得できない
         場合はNoneを返す（呼び出し側は人数表示を省略する）。
         """
+        path = f"/instances/{_encode_instance_location(location)}"
         try:
-            response = await self._request("GET", f"/instances/{quote(location, safe='')}")
+            response = await self._request("GET", path)
         except VRChatAPIError:
             return None
         return VRChatInstance.model_validate(response.json())

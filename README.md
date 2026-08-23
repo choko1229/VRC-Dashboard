@@ -152,9 +152,10 @@ tests/                  # unit / integration
 - サイドバーの「同じインスタンス」区分は、Pipelineの`user-location`イベント（自分自身の現在地）
   とフレンドの`current_location`を突き合わせて判定し、インスタンス総人数は
   `GET /instances/{location}` から取得する。`friend-active`イベント（ワールド非滞在での接続中
-  状態）や`user-location`はコミュニティ整備の非公式ドキュメントに基づく実装であり、実際の
-  VRChatアカウントでの動作は開発環境（サンドボックス）のTLS制限により未検証。初回デプロイ後に
-  実際の見え方を確認することを推奨する。
+  状態）や`user-location`はコミュニティ整備の非公式ドキュメントに基づく実装。本番環境での
+  実動作確認により、`GET /instances/{location}`のlocationは`:`・`~`・`()`を percent-encode
+  すると400 Bad Requestになる（生のまま渡す必要がある）ことが判明し修正済み
+  （`app/services/vrchat/client.py`の`_encode_instance_location`参照）。
 - VRChatはPipeline(WebSocket)接続時にデフォルトのUser-Agent（`websockets`ライブラリの既定値等）
   を`403 Forbidden`で拒否するため、REST APIと同じ設定済みVRChat用User-Agent
   （`/settings/general`で変更可能）をWebSocketハンドシェイクにも明示的に付与している。
