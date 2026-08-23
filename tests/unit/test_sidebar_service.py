@@ -42,9 +42,9 @@ async def test_groups_friends_by_state(
 
         groups = await sidebar_service.get_friend_sidebar_groups(db)
 
-        assert [g.friend_count for g in groups.instance_groups] == [1]
-        assert [f.vrchat_user_id for f in groups.instance_groups[0].friends] == ["usr_online"]
-        assert groups.online_other == []
+        # インスタンスに1人しかいないため、グループの見出しは作らずonline_otherに入る。
+        assert groups.instance_groups == []
+        assert [f.vrchat_user_id for f in groups.online_other] == ["usr_online"]
         assert [f.vrchat_user_id for f in groups.active] == ["usr_active"]
         assert [f.vrchat_user_id for f in groups.offline] == ["usr_offline"]
 
@@ -86,10 +86,9 @@ async def test_friend_limit_prioritizes_online_over_offline(
             + len(groups.offline)
         )
         assert total_returned == _SIDEBAR_FRIEND_LIMIT
-        # 上限を超えても、オンラインのフレンドは切り詰められずに残る。
-        assert [f.vrchat_user_id for f in groups.instance_groups[0].friends] == [
-            "usr_online_priority"
-        ]
+        # 上限を超えても、オンラインのフレンドは切り詰められずに残る
+        # (インスタンスに1人しかいないためonline_other側に入る)。
+        assert [f.vrchat_user_id for f in groups.online_other] == ["usr_online_priority"]
         assert len(groups.offline) == _SIDEBAR_FRIEND_LIMIT - 1
 
 
@@ -142,12 +141,15 @@ async def test_groups_friends_by_instance_known_first_unknown_after(
 
         groups = await sidebar_service.get_friend_sidebar_groups(db)
 
-        # 人数の多いインスタンスグループが上位、インスタンス不明なフレンドは末尾。
-        assert [g.friend_count for g in groups.instance_groups] == [2, 1]
+        # 2人以上いるインスタンスのみグループ化される。1人だけのインスタンス
+        # (usr_elsewhere)とインスタンス不明(usr_private)は、見出し無しの末尾にまとまる。
+        assert [g.friend_count for g in groups.instance_groups] == [2]
         assert groups.instance_groups[0].world_name == "共有ワールド"
         assert {f.vrchat_user_id for f in groups.instance_groups[0].friends} == {
             "usr_same_1",
             "usr_same_2",
         }
-        assert [f.vrchat_user_id for f in groups.instance_groups[1].friends] == ["usr_elsewhere"]
-        assert [f.vrchat_user_id for f in groups.online_other] == ["usr_private"]
+        assert {f.vrchat_user_id for f in groups.online_other} == {
+            "usr_elsewhere",
+            "usr_private",
+        }

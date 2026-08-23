@@ -117,9 +117,10 @@ def group_online_friends_by_instance(
 ) -> tuple[list[FriendInstanceGroup], list[Friend]]:
     """オンラインのフレンドを現在のインスタンスごとにグループ化する。
 
-    現在地が判明している（locationが"private"/"traveling"/None以外の）フレンドを
-    人数の多いグループ順にまとめ、判明していないフレンドは2つ目の戻り値として
-    まとめて返す（フレンド一覧では、グループの後に続けて見出し無しで表示する）。
+    同じインスタンスに2人以上いる場合のみグループの見出しを作る（人数の多いグループ順）。
+    現在地が不明（locationが"private"/"traveling"/None）なフレンドと、そのインスタンスに
+    自分しかいない（1人だけの）フレンドは、2つ目の戻り値としてまとめて返す
+    （フレンド一覧では、グループの後に見出し無しで続けて表示する）。
     """
     groups_by_location: dict[str, list[Friend]] = {}
     unknown: list[Friend] = []
@@ -131,18 +132,22 @@ def group_online_friends_by_instance(
             continue
         groups_by_location.setdefault(location, []).append(friend)
 
-    groups = [
-        FriendInstanceGroup(
-            location=location,
-            world_name=members[0].current_world_name,
-            world_thumbnail_url=members[0].current_world_thumbnail_url,
-            region_flag=parse_instance_region_flag(location),
-            privacy_label=parse_instance_privacy_label(location),
-            friend_count=len(members),
-            friends=members,
+    groups: list[FriendInstanceGroup] = []
+    for location, members in groups_by_location.items():
+        if len(members) < 2:
+            unknown.extend(members)
+            continue
+        groups.append(
+            FriendInstanceGroup(
+                location=location,
+                world_name=members[0].current_world_name,
+                world_thumbnail_url=members[0].current_world_thumbnail_url,
+                region_flag=parse_instance_region_flag(location),
+                privacy_label=parse_instance_privacy_label(location),
+                friend_count=len(members),
+                friends=members,
+            )
         )
-        for location, members in groups_by_location.items()
-    ]
     groups.sort(key=lambda group: group.friend_count, reverse=True)
     return groups, unknown
 
@@ -174,9 +179,19 @@ async def _maybe_notify(
 
 
 async def bootstrap_friends_from_vrchat(
-    db: AsyncSession, *, online_friends: list[VRChatUser], offline_friends: list[VRChatUser]
+    db: AsyncSession,
+    client: VRChatClient,
+    *,
+    online_friends: list[VRChatUser],
+    offline_friends: list[VRChatUser],
 ) -> None:
-    """REST APIの初回取得結果でfriendテーブル全体を作り直す（is_onlineも含めて確定させる）。"""
+    """REST APIの初回取得結果でfriendテーブル全体を作り直す（is_onlineも含めて確定させる）。
+
+    オンラインのフレンドはワールド名/サムネイルをPipelineのイベントでしか取得できず
+    （フレンド一覧APIのレスポンスには含まれない）、Pipelineイベントが発生するまで空欄になって
+    しまうため、ここで`GET /worlds/{id}`から補完する（`VRChatClient`が同一world_idの重複
+    リクエストをキャッシュするため、フレンド数が多くても実際のワールド種類数分しか叩かない）。
+    """
     now = datetime.now(UTC)
 
     for vrchat_user, is_online in (
@@ -201,6 +216,14 @@ async def bootstrap_friends_from_vrchat(
             friend.current_world_id = world_id
             friend.current_location = vrchat_user.location
             friend.last_seen_online_at = now
+            if world_id:
+                # 取得に失敗した場合（一時的な通信エラー等）は、既存の値を上書きせず残す。
+                world_name = await client.get_world_name(world_id)
+                if world_name is not None:
+                    friend.current_world_name = world_name
+                world_thumbnail_url = await client.get_world_thumbnail_url(world_id)
+                if world_thumbnail_url is not None:
+                    friend.current_world_thumbnail_url = world_thumbnail_url
         else:
             friend.current_world_id = None
             friend.current_world_name = None

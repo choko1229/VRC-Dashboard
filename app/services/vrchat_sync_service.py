@@ -22,7 +22,7 @@ async def full_friends_sync(db: AsyncSession, client: VRChatClient) -> None:
         online_friends = await client.get_friends(offline=False)
         offline_friends = await client.get_friends(offline=True)
         await friends_service.bootstrap_friends_from_vrchat(
-            db, online_friends=online_friends, offline_friends=offline_friends
+            db, client, online_friends=online_friends, offline_friends=offline_friends
         )
 
         groups = await client.get_favorite_friend_groups()

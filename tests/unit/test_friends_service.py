@@ -138,6 +138,24 @@ async def test_handle_friend_online_then_offline_updates_online_state(
         assert result.scalar_one().online_state == "offline"
 
 
+class _FakeWorldLookupClient:
+    """`bootstrap_friends_from_vrchat`のワールド名/サムネイル補完に使う最小限のフェイク。"""
+
+    def __init__(
+        self, *, world_name: str | None = "テストワールド", thumbnail_url: str | None = None
+    ) -> None:
+        self._world_name = world_name
+        self._thumbnail_url = thumbnail_url
+        self.requested_world_ids: list[str] = []
+
+    async def get_world_name(self, world_id: str) -> str | None:
+        self.requested_world_ids.append(world_id)
+        return self._world_name
+
+    async def get_world_thumbnail_url(self, world_id: str) -> str | None:
+        return self._thumbnail_url
+
+
 async def test_bootstrap_friends_from_vrchat(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -156,8 +174,11 @@ async def test_bootstrap_friends_from_vrchat(
         offline = [
             VRChatUser.model_validate({"id": "usr_b", "displayName": "B", "status": "offline"})
         ]
+        client = _FakeWorldLookupClient(
+            world_name="テストワールド", thumbnail_url="https://example.com/thumb.png"
+        )
         await friends_service.bootstrap_friends_from_vrchat(
-            db, online_friends=online, offline_friends=offline
+            db, client, online_friends=online, offline_friends=offline  # type: ignore[arg-type]
         )
 
         friends = (await db.execute(select(Friend))).scalars().all()
@@ -165,6 +186,9 @@ async def test_bootstrap_friends_from_vrchat(
         assert by_id["usr_a"].is_online is True
         assert by_id["usr_a"].current_world_id == "wrld_1"
         assert by_id["usr_a"].online_state == "online"
+        assert by_id["usr_a"].current_world_name == "テストワールド"
+        assert by_id["usr_a"].current_world_thumbnail_url == "https://example.com/thumb.png"
+        assert client.requested_world_ids == ["wrld_1"]
         assert by_id["usr_b"].is_online is False
         assert by_id["usr_b"].online_state == "offline"
 
@@ -370,32 +394,64 @@ async def test_status_update_no_event_when_nothing_changed(
 def test_group_online_friends_by_instance_groups_by_location_and_sorts_by_size() -> None:
     friend_a1 = Friend(vrchat_user_id="usr_a1", display_name="A1", current_location="wrld_a:1")
     friend_a2 = Friend(vrchat_user_id="usr_a2", display_name="A2", current_location="wrld_a:1")
+    friend_a3 = Friend(vrchat_user_id="usr_a3", display_name="A3", current_location="wrld_a:1")
     friend_b1 = Friend(vrchat_user_id="usr_b1", display_name="B1", current_location="wrld_b:1")
+    friend_b2 = Friend(vrchat_user_id="usr_b2", display_name="B2", current_location="wrld_b:1")
+    friend_alone = Friend(
+        vrchat_user_id="usr_alone", display_name="Alone", current_location="wrld_c:1"
+    )
     friend_private = Friend(vrchat_user_id="usr_p", display_name="P", current_location="private")
     friend_unknown = Friend(vrchat_user_id="usr_u", display_name="U", current_location=None)
 
     groups, unknown = friends_service.group_online_friends_by_instance(
-        [friend_a1, friend_a2, friend_b1, friend_private, friend_unknown]
+        [
+            friend_a1,
+            friend_a2,
+            friend_a3,
+            friend_b1,
+            friend_b2,
+            friend_alone,
+            friend_private,
+            friend_unknown,
+        ]
     )
 
-    assert [g.friend_count for g in groups] == [2, 1]
+    # 同じインスタンスに2人以上いるグループのみ見出しを作る(人数の多い順)。
+    assert [g.friend_count for g in groups] == [3, 2]
     assert groups[0].location == "wrld_a:1"
-    assert groups[0].friends == [friend_a1, friend_a2]
+    assert groups[0].friends == [friend_a1, friend_a2, friend_a3]
     assert groups[1].location == "wrld_b:1"
-    assert unknown == [friend_private, friend_unknown]
+    # インスタンスに1人しかいないフレンドは、不明なフレンドと同様に末尾へまとめる。
+    assert unknown == [friend_private, friend_unknown, friend_alone]
 
 
 def test_group_online_friends_by_instance_uses_first_member_world_info() -> None:
-    friend = Friend(
+    friend1 = Friend(
         vrchat_user_id="usr_a1",
         display_name="A1",
         current_location="wrld_a:1~region(jp)",
         current_world_name="テストワールド",
         current_world_thumbnail_url="https://example.com/thumb.png",
     )
+    friend2 = Friend(
+        vrchat_user_id="usr_a2",
+        display_name="A2",
+        current_location="wrld_a:1~region(jp)",
+        current_world_name="テストワールド",
+        current_world_thumbnail_url="https://example.com/thumb.png",
+    )
 
-    groups, _unknown = friends_service.group_online_friends_by_instance([friend])
+    groups, _unknown = friends_service.group_online_friends_by_instance([friend1, friend2])
 
     assert groups[0].world_name == "テストワールド"
     assert groups[0].world_thumbnail_url == "https://example.com/thumb.png"
     assert groups[0].region_flag == "🇯🇵"
+
+
+def test_group_online_friends_by_instance_single_member_not_grouped() -> None:
+    friend = Friend(vrchat_user_id="usr_alone", display_name="Alone", current_location="wrld_a:1")
+
+    groups, unknown = friends_service.group_online_friends_by_instance([friend])
+
+    assert groups == []
+    assert unknown == [friend]

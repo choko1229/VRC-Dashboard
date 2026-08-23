@@ -85,7 +85,7 @@ class VRChatClient:
             cookies=cookies,
             timeout=timeout,
         )
-        self._world_name_cache: dict[str, str] = {}
+        self._world_details_cache: dict[str, VRChatWorld] = {}
 
     async def __aenter__(self) -> VRChatClient:
         return self
@@ -246,20 +246,27 @@ class VRChatClient:
             offset += page_size
         return events
 
-    async def get_world_name(self, world_id: str) -> str | None:
-        """ワールド名を取得する（同一インスタンス内はメモリキャッシュする）。"""
-        if world_id in self._world_name_cache:
-            return self._world_name_cache[world_id]
+    async def _get_world_details(self, world_id: str) -> VRChatWorld | None:
+        """ワールドの詳細（名前・サムネイル等）を取得する（同一インスタンス内はメモリキャッシュする）。"""
+        if world_id in self._world_details_cache:
+            return self._world_details_cache[world_id]
 
         try:
             response = await self._request("GET", f"/worlds/{world_id}")
         except VRChatAPIError:
             return None
 
-        name = response.json().get("name")
-        if isinstance(name, str):
-            self._world_name_cache[world_id] = name
-        return name if isinstance(name, str) else None
+        world = VRChatWorld.model_validate(response.json())
+        self._world_details_cache[world_id] = world
+        return world
+
+    async def get_world_name(self, world_id: str) -> str | None:
+        world = await self._get_world_details(world_id)
+        return world.name if world else None
+
+    async def get_world_thumbnail_url(self, world_id: str) -> str | None:
+        world = await self._get_world_details(world_id)
+        return world.thumbnail_image_url if world else None
 
     async def get_instance(self, location: str) -> VRChatInstance | None:
         """インスタンスの現在人数等を取得する（サイドバーの「同じインスタンス」表示用）。
