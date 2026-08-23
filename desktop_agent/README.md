@@ -79,3 +79,8 @@ powershell -File desktop_agent/build.ps1
   それを超えると古いイベントから破棄します）。
 - exeは自己署名・コード署名を行っていないため、初回実行時にWindows SmartScreenの警告が
   表示される場合があります（「詳細情報」→「実行」で起動できる）。
+
+## TODO
+
+- **コード署名**: 現状exeは無署名のため配布のたびにSmartScreen警告が出る。コード署名
+  証明書（EV/OV）を取得し、`build.ps1`のビルド後に`signtool sign`する工程を追加する。
