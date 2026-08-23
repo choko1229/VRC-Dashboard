@@ -1,10 +1,10 @@
-"""ローカルエージェント（local_agent/）が送信するゲームログの取り込み・表示用集計。
+"""ローカルエージェント（desktop_agent/）が送信するゲームログの取り込み・表示用集計。
 
 VRChat公式APIには「訪問したインスタンスの入退室履歴」「参加者の入退室」「動画再生URL」は
 一切含まれていない（これらはVRChatクライアントがローカルに出力するログファイルにのみ存在する）。
 そのためこの機能はサーバー側のPipeline/API監視とは別に、ユーザーのPC上で動くローカル
 エージェントがログファイルを解析し、`POST /api/game-log/events`で送信してきたイベントを
-取り込む方式で成立している（詳細はREADME・local_agent/README.md参照）。
+取り込む方式で成立している（詳細はREADME・desktop_agent/README.md参照）。
 """
 
 from __future__ import annotations

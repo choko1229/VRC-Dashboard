@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from local_agent.gamelog_parser import parse_line, parse_timestamp, world_id_from_location
+from desktop_agent.gamelog_parser import parse_line, parse_timestamp, world_id_from_location
 
 
 def test_parse_timestamp() -> None:

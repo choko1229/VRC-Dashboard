@@ -9,8 +9,16 @@
 
     <p class="text-muted">
         {% if is_configured %}APIキー発行済み。{% else %}APIキー未発行です。{% endif %}
-        ローカルエージェント（<a href="/game-log/agent-script" download>gamelog_watcher.py</a>）を
-        VRChatを起動しているPCで動かし、下記URLとAPIキーを設定してください。
+        {% if agent_download_available %}
+        「VRCダッシュボード連携ツール」（<a href="/game-log/agent/download">VRCDashboardAgent.exe</a>
+        v{{ agent_version }}）をVRChatを起動しているPCでダウンロード・起動し、
+        {% else %}
+        まだ配布用のexeがアップロードされていません。下記から
+        <a href="/game-log/agent-script">gamelog_watcher.py</a>（Python実行が必要）を
+        VRChatを起動しているPCで動かすか、exeをビルドしてアップロードしてください。起動後は
+        {% endif %}
+        初回起動時のダイアログに下記URLとAPIキーを入力してください。タスクトレイに常駐し、
+        自動更新にも対応しています。
     </p>
     <p class="text-muted">送信先URL: <code>{{ request.url_for("ingest_game_log_events") }}</code></p>
 
@@ -24,4 +32,20 @@
         </button>
         {% endif %}
     </div>
+
+    <hr class="gamelog-setup-divider">
+
+    <p class="text-muted">
+        配布中のビルド: {% if agent_version %}<strong>v{{ agent_version }}</strong>{% else %}未アップロード{% endif %}
+        （新しいバージョンをビルドする手順は<code>desktop_agent/README.md</code>参照）
+    </p>
+    <form class="gamelog-release-form"
+        hx-post="/game-log/agent/release"
+        hx-encoding="multipart/form-data"
+        hx-target="closest .gamelog-setup-panel"
+        hx-swap="outerHTML">
+        <input type="text" name="version" placeholder="バージョン（例: 0.2.0）" required>
+        <input type="file" name="file" accept=".exe" required>
+        <button type="submit" class="btn btn-ghost">アップロード</button>
+    </form>
 </div>

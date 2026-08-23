@@ -1,4 +1,4 @@
-"""ローカルエージェント（local_agent/）からのゲームログ取り込みリクエストのスキーマ。"""
+"""ローカルエージェント（desktop_agent/）からのゲームログ取り込みリクエストのスキーマ。"""
 
 from __future__ import annotations
 
@@ -34,3 +34,10 @@ class GameLogEventIn(BaseModel):
 
 class GameLogIngestRequest(BaseModel):
     events: list[GameLogEventIn]
+
+
+class AgentVersionResponse(BaseModel):
+    """デスクトップエージェントの自己更新チェック（GET /api/game-log/agent/version）の応答。"""
+
+    version: str
+    download_available: bool

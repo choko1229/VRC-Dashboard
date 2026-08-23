@@ -137,3 +137,14 @@ async def verify_game_log_api_key(db: AsyncSession, raw_key: str) -> bool:
     if not stored_hash:
         return False
     return secrets.compare_digest(stored_hash, hash_session_token(raw_key))
+
+
+_GAME_LOG_AGENT_VERSION_KEY = "game_log_agent_version"
+
+
+async def get_game_log_agent_version(db: AsyncSession) -> str | None:
+    return await app_setting_service.get_setting(db, _GAME_LOG_AGENT_VERSION_KEY)
+
+
+async def set_game_log_agent_version(db: AsyncSession, version: str) -> None:
+    await app_setting_service.set_setting(db, _GAME_LOG_AGENT_VERSION_KEY, version)

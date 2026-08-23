@@ -1,0 +1,6 @@
+# デスクトップエージェントをexe化するためだけの依存関係（本体アプリのpyproject.tomlには含めない）。
+# インストール:
+#   .venv/Scripts/pip install -r desktop_agent/requirements-build.txt
+pyinstaller>=6.10.0
+pystray>=0.19.5
+Pillow>=10.4.0

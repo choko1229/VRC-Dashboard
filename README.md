@@ -33,13 +33,16 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
     - **JSON**: 保存済み情報とVRChatから取得したフルプロフィールの生データ。
     - 「共通のフレンド」「お気に入りワールド」「アバター」はVRChat APIで他ユーザーの
       当該データを取得する手段が無い（またはプライバシー上非公開）ため非対応。
-- **ゲームログ**（`/game-log`）: VRChatを起動しているPC上で動く別プロセスのローカルエージェント
-  （`local_agent/gamelog_watcher.py`）がVRChatクライアントのログファイルを解析し、訪問した
-  インスタンスごとに「プレイヤー参加/退出」「動画再生URL」を記録・表示するVRCXのゲームログ
-  画面に近い機能。VRChat公式APIにはフレンド以外の参加者の入退室や動画再生URLは一切存在しない
-  （ゲームクライアントのローカルログにのみ出力される）ため、Pipeline/APIとは別経路で成立して
-  いる。エージェントは`/game-log`の「エージェント連携の設定」（管理者のみ）で発行したAPIキーで
-  `POST /api/game-log/events`に認証する。詳細は`local_agent/README.md`参照。
+- **ゲームログ**（`/game-log`）: VRChatを起動しているPC上で動く別プロセスの
+  「VRCダッシュボード連携ツール」（`desktop_agent/`、タスクトレイ常駐・自動更新対応の
+  Windows exe）がVRChatクライアントのログファイルを解析し、訪問したインスタンスごとに
+  「プレイヤー参加/退出」「動画再生URL」を記録・表示するVRCXのゲームログ画面に近い機能。
+  VRChat公式APIにはフレンド以外の参加者の入退室や動画再生URLは一切存在しない（ゲーム
+  クライアントのローカルログにのみ出力される）ため、Pipeline/APIとは別経路で成立している。
+  エージェントは`/game-log`の「エージェント連携の設定」（管理者のみ）で発行したAPIキーで
+  `POST /api/game-log/events`に認証し、`GET /api/game-log/agent/version`で自身の新しい
+  ビルドが公開されていないか定期確認して自己更新する。管理者は同画面から新しいビルド
+  （exe）をアップロードして配布バージョンを更新できる。詳細は`desktop_agent/README.md`参照。
 - **アバター準備状況**: 自分のアバター一覧の同期、タグ付け、メモ管理。
 - **今日の予定**: 手動登録またはVRChatグループカレンダーからの取り込みによるスケジュール管理
   （月間/週間カレンダー表示）。
@@ -126,7 +129,8 @@ app/
 └── static/              # CSS（LINE Seed JPフォントに統一）・JS・フォント
 alembic/                # マイグレーション
 scripts/seed_allowlist.py  # 許可リストへの手動追加（コンソールが使える場合の代替手段）
-local_agent/            # ゲームログ収集用ローカルエージェント（本体アプリとは別プロセス/PCで動く、標準ライブラリのみ）
+desktop_agent/          # 「VRCダッシュボード連携ツール」（本体アプリとは別プロセス/PCで動くWindows exe。
+                        #   タスクトレイ常駐・自動更新。ビルドのみpystray/Pillow/PyInstallerが必要）
 tests/                  # unit / integration
 ```
 
@@ -156,6 +160,12 @@ tests/                  # unit / integration
 - タイムゾーン変換（アクティビティのJST集計等）にはPython標準の`zoneinfo`を使用しており、
   IANAタイムゾーンDBを持たない環境（Windows開発機やslim系Dockerイメージ等）でも動くよう
   `tzdata`パッケージを依存関係に含めている。
-- ゲームログ機能のログ解析正規表現（`local_agent/gamelog_parser.py`）は、VRChatクライアントの
+- ゲームログ機能のログ解析正規表現（`desktop_agent/gamelog_parser.py`）は、VRChatクライアントの
   非公式なログ書式についてVRCX等の既存コミュニティツールで広く知られているパターンに基づく
   最善努力の実装であり、実際のログでの動作確認・調整が必要になる場合がある。
+- 「VRCダッシュボード連携ツール」（`desktop_agent/`）のexeは自己署名・コード署名を行っていない
+  ため、初回実行時にWindows SmartScreenの警告が表示される場合がある。自動更新は
+  サーバー側の配布バージョンと自身の`desktop_agent/version.py`を比較し、実行中のexeファイルを
+  リネームしてから新しいexeに置き換える方式（Windows特有の挙動を利用）で実現している。
+  ビルドにのみpystray/Pillow/PyInstallerを使うため、これらは本体アプリの`pyproject.toml`の
+  依存関係には含めていない（`desktop_agent/requirements-build.txt`参照）。
