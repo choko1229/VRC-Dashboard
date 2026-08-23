@@ -42,7 +42,10 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
   エージェントは`/game-log`の「エージェント連携の設定」（管理者のみ）で発行したAPIキーで
   `POST /api/game-log/events`に認証し、`GET /api/game-log/agent/version`で自身の新しい
   ビルドが公開されていないか定期確認して自己更新する。管理者は同画面から新しいビルド
-  （exe）をアップロードして配布バージョンを更新できる。詳細は`desktop_agent/README.md`参照。
+  （exe）をアップロードして配布バージョンを更新できる（`POST /game-log/agent/release`は
+  管理者セッションに加え、同画面で発行できる別のリリースアップロード用トークンでも認証でき、
+  `desktop_agent/build.ps1`はビルド後にこのトークンで自動アップロードする）。
+  詳細は`desktop_agent/README.md`参照。
 - **アバター準備状況**: 自分のアバター一覧の同期、タグ付け、メモ管理。
 - **今日の予定**: 手動登録またはVRChatグループカレンダーからの取り込みによるスケジュール管理
   （月間/週間カレンダー表示）。

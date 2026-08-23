@@ -47,13 +47,33 @@ exe化にはPyInstaller・pystray・Pillowを使う（本体アプリの実行�
 powershell -File desktop_agent/build.ps1
 ```
 
-`desktop_agent/dist/VRCDashboardAgent.exe` が生成される。新しいバージョンを配布する場合:
+`desktop_agent/dist/VRCDashboardAgent.exe` が生成される。
+
+### ビルド後の自動アップロード
+
+`build.ps1` はビルドに続けて、`desktop_agent/version.py` の `__version__` と生成したexeを
+ダッシュボードへ自動でアップロードする（`POST /game-log/agent/release`）。アップロード先は
+次のいずれかで指定する。
+
+- `powershell -File desktop_agent/build.ps1 -ServerUrl https://your-dashboard.example.com -ReleaseToken <トークン>`
+- または `desktop_agent/release_config.local.json`（`release_config.local.json.example` を
+  コピーして作成。リリーストークンを含むためgit管理対象外）
+
+リリーストークンはダッシュボードの `/game-log` の「エージェント連携の設定」（管理者のみ）
+から発行する（ゲームログ取り込み用APIキーとは別物で、新しいビルドをアップロードできる強い
+権限を持つため別のシークレットとして扱っている）。
+
+どちらも指定しない場合、またはビルドのみ行いたい場合は `-NoUpload` を付ければアップロードを
+スキップしてビルドだけ行う。サーバーは常に最新の1本だけを保持する（バージョン履歴は持たない）。
+
+新しいバージョンを配布する手順:
 
 1. `desktop_agent/version.py` の `__version__` を上げる。
-2. 上記コマンドでビルドする。
-3. ダッシュボードの `/game-log` の「エージェント連携の設定」から、バージョン番号と
-   生成されたexeをアップロードする（管理者のみ）。サーバーは常に最新の1本だけを保持する
-   （バージョン履歴は持たない）。
+2. `powershell -File desktop_agent/build.ps1` を実行する（ビルド→アップロードが自動で行われる）。
+
+手動でアップロードしたい場合は、ダッシュボードの `/game-log` の「エージェント連携の設定」から
+バージョン番号と生成されたexeを直接アップロードすることもできる（管理者としてログインした
+セッションでも同じアップロードフォームが使える）。
 
 開発中は `python -m desktop_agent.main` でexe化せずに直接実行できる（この場合、自己更新・
 スタートアップ登録は「実行中のファイルを安全に置き換える先」が無いため無効になる）。

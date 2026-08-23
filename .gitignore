@@ -190,3 +190,6 @@ desktop_agent/*.spec
 
 # 配布用エージェントバイナリ（管理画面からアップロードされ、サーバーが保持する）
 data/agent_releases/
+
+# ビルドスクリプトの自動アップロード先設定（リリーストークンを含むためgit管理対象外）
+desktop_agent/release_config.local.json

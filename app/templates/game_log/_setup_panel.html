@@ -35,10 +35,32 @@
 
     <hr class="gamelog-setup-divider">
 
+    {% if new_release_token %}
+    <p class="gamelog-setup-warning">
+        新しいリリースアップロード用トークンです。この画面を離れると二度と表示されません。
+        <code>desktop_agent/release_config.local.json</code> に貼り付けてください。
+    </p>
+    <code class="gamelog-api-key-value">{{ new_release_token }}</code>
+    {% endif %}
+
     <p class="text-muted">
         配布中のビルド: {% if agent_version %}<strong>v{{ agent_version }}</strong>{% else %}未アップロード{% endif %}
-        （新しいバージョンをビルドする手順は<code>desktop_agent/README.md</code>参照）
+        。{% if release_token_configured %}リリースアップロード用トークン発行済み。{% else %}
+        リリースアップロード用トークン未発行です。{% endif %}
+        <code>desktop_agent/build.ps1</code> はこのトークンを使ってビルド後に自動アップロード
+        する（手順は<code>desktop_agent/README.md</code>参照）。
     </p>
+    <div class="gamelog-setup-actions">
+        <button type="button" class="btn btn-primary" hx-post="/game-log/release-token" hx-target="closest .gamelog-setup-panel" hx-swap="outerHTML">
+            {{ icon_key(16) }} {% if release_token_configured %}トークンを再発行{% else %}トークンを発行{% endif %}
+        </button>
+        {% if release_token_configured %}
+        <button type="button" class="btn btn-ghost" hx-delete="/game-log/release-token" hx-target="closest .gamelog-setup-panel" hx-swap="outerHTML" hx-confirm="トークンを無効化しますか？build.ps1からの自動アップロードができなくなります。">
+            無効化
+        </button>
+        {% endif %}
+    </div>
+
     <form class="gamelog-release-form"
         hx-post="/game-log/agent/release"
         hx-encoding="multipart/form-data"
@@ -46,6 +68,6 @@
         hx-swap="outerHTML">
         <input type="text" name="version" placeholder="バージョン（例: 0.2.0）" required>
         <input type="file" name="file" accept=".exe" required>
-        <button type="submit" class="btn btn-ghost">アップロード</button>
+        <button type="submit" class="btn btn-ghost">手動アップロード</button>
     </form>
 </div>

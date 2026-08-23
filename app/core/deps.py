@@ -70,3 +70,30 @@ async def require_game_log_api_key(
     raw_key = authorization.removeprefix("Bearer ").strip()
     if not raw_key or not await app_config_service.verify_game_log_api_key(db, raw_key):
         raise InvalidGameLogApiKeyError
+
+
+async def require_admin_or_release_token(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> None:
+    """新しいエージェントビルドのアップロードを認証する。
+
+    ビルドスクリプトからの自動アップロード（`Authorization: Bearer <リリーストークン>`）と、
+    管理画面からの手動アップロード（ログインセッションCookie、管理者のみ）の両方を許可する。
+    """
+    if authorization and authorization.startswith("Bearer "):
+        raw_token = authorization.removeprefix("Bearer ").strip()
+        if raw_token and await app_config_service.verify_release_upload_token(db, raw_token):
+            return
+        raise InvalidGameLogApiKeyError
+
+    raw_session_token = request.cookies.get(settings.session_cookie_name)
+    if raw_session_token is None:
+        raise NotAuthenticatedError
+    user = await get_user_for_session_token(db, raw_session_token)
+    if user is None:
+        raise NotAuthenticatedError
+    if not user.is_admin:
+        raise NotAdminError

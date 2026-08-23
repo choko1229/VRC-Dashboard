@@ -148,3 +148,35 @@ async def get_game_log_agent_version(db: AsyncSession) -> str | None:
 
 async def set_game_log_agent_version(db: AsyncSession, version: str) -> None:
     await app_setting_service.set_setting(db, _GAME_LOG_AGENT_VERSION_KEY, version)
+
+
+_RELEASE_UPLOAD_TOKEN_HASH_KEY = "game_log_release_upload_token_hash"
+
+
+async def is_release_upload_token_configured(db: AsyncSession) -> bool:
+    return bool(await app_setting_service.get_setting(db, _RELEASE_UPLOAD_TOKEN_HASH_KEY))
+
+
+async def generate_release_upload_token(db: AsyncSession) -> str:
+    """ビルドスクリプトからの自動アップロード用トークンを発行する（既存トークンは無効化される）。
+
+    ゲームログ取り込み用APIキー（generate_game_log_api_key）とは別物: あちらは
+    エージェント実行時の閲覧専用スコープ（取り込み/バージョン確認/ダウンロード）、
+    こちらは新しいビルドをアップロードできる強い権限のため、別のシークレットとして扱う。
+    """
+    raw_token = secrets.token_urlsafe(32)
+    await app_setting_service.set_setting(
+        db, _RELEASE_UPLOAD_TOKEN_HASH_KEY, hash_session_token(raw_token)
+    )
+    return raw_token
+
+
+async def revoke_release_upload_token(db: AsyncSession) -> None:
+    await app_setting_service.set_setting(db, _RELEASE_UPLOAD_TOKEN_HASH_KEY, None)
+
+
+async def verify_release_upload_token(db: AsyncSession, raw_token: str) -> bool:
+    stored_hash = await app_setting_service.get_setting(db, _RELEASE_UPLOAD_TOKEN_HASH_KEY)
+    if not stored_hash:
+        return False
+    return secrets.compare_digest(stored_hash, hash_session_token(raw_token))

@@ -8,7 +8,12 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_admin_user, get_current_user, require_game_log_api_key
+from app.core.deps import (
+    get_current_admin_user,
+    get_current_user,
+    require_admin_or_release_token,
+    require_game_log_api_key,
+)
 from app.core.templating import templates
 from app.db.session import get_db
 from app.schemas.game_log import AgentVersionResponse, GameLogIngestRequest
@@ -22,13 +27,20 @@ _AGENT_SCRIPT_PATH = (
 
 
 async def _setup_panel_context(
-    db: AsyncSession, *, new_api_key: str | None = None
+    db: AsyncSession,
+    *,
+    new_api_key: str | None = None,
+    new_release_token: str | None = None,
 ) -> dict[str, object]:
     return {
         "is_configured": await app_config_service.is_game_log_api_key_configured(db),
         "new_api_key": new_api_key,
         "agent_version": await agent_release_service.get_latest_version(db),
         "agent_download_available": agent_release_service.has_release(),
+        "release_token_configured": await app_config_service.is_release_upload_token_configured(
+            db
+        ),
+        "new_release_token": new_release_token,
     }
 
 
@@ -138,7 +150,7 @@ async def download_agent_exe_for_agent() -> FileResponse:
 @router.post(
     "/game-log/agent/release",
     response_class=HTMLResponse,
-    dependencies=[Depends(get_current_admin_user)],
+    dependencies=[Depends(require_admin_or_release_token)],
 )
 async def upload_agent_release(
     request: Request,
@@ -148,6 +160,36 @@ async def upload_agent_release(
 ) -> HTMLResponse:
     content = await file.read()
     await agent_release_service.save_release(db, version=version.strip(), content=content)
+    return templates.TemplateResponse(
+        request, "game_log/_setup_panel.html", await _setup_panel_context(db)
+    )
+
+
+@router.post(
+    "/game-log/release-token",
+    response_class=HTMLResponse,
+    dependencies=[Depends(get_current_admin_user)],
+)
+async def generate_release_upload_token(
+    request: Request, db: AsyncSession = Depends(get_db)
+) -> HTMLResponse:
+    raw_token = await app_config_service.generate_release_upload_token(db)
+    return templates.TemplateResponse(
+        request,
+        "game_log/_setup_panel.html",
+        await _setup_panel_context(db, new_release_token=raw_token),
+    )
+
+
+@router.delete(
+    "/game-log/release-token",
+    response_class=HTMLResponse,
+    dependencies=[Depends(get_current_admin_user)],
+)
+async def revoke_release_upload_token(
+    request: Request, db: AsyncSession = Depends(get_db)
+) -> HTMLResponse:
+    await app_config_service.revoke_release_upload_token(db)
     return templates.TemplateResponse(
         request, "game_log/_setup_panel.html", await _setup_panel_context(db)
     )
