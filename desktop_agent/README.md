@@ -99,7 +99,9 @@ powershell -File desktop_agent/build.ps1
   （`python gamelog_watcher.py --server-url ... --api-key ...`、ただしその場合は
   `/game-log`の「エージェント連携の設定」から手動でトークンを発行する必要がある）
 - `device_pairing.py`: ブラウザでログイン→承認、というペアリングフロー（コード取得・
-  ブラウザを開く・ポーリング）
+  ブラウザを開く・ポーリング）。POSTがリダイレクトでGETに化けないようにする独自の
+  リダイレクトハンドラも含む（http→https強制リダイレクトの環境向け）
+- `branding.py`: Web UIと揃えた配色・アイコン生成（`tray_app.py`・`first_run_dialog.py`が使う）
 - `updater.py`: GitHub Releasesでのバージョン比較・ダウンロード・自己置換
 - `startup.py`: Windowsスタートアップ（`HKCU\...\Run`）への登録・解除
 - `config.py` / `paths.py`: 設定・状態ファイルのパス解決
@@ -120,6 +122,11 @@ powershell -File desktop_agent/build.ps1
 - PyInstaller同梱のOpenSSLが、環境によっては一部サイトのTLS証明書チェーン検証に失敗する
   ことがあるため（`CERTIFICATE_VERIFY_FAILED: Basic Constraints of CA cert not marked
   critical`）、`truststore`パッケージでOSのネイティブ証明書検証に差し替えている。
+- ダッシュボードがCloudflare等のWAF/ボット対策の背後にある場合、Pythonの`urllib`が送る
+  既定のUser-Agent（`Python-urllib/x.y`）が403でブロックされることがある。エージェントの
+  全リクエストに明示的な`User-Agent: VRCDashboardAgent`を付与して回避している
+  （v0.1.2で修正。この問題が再発する場合はダッシュボード側のWAF設定でこのUser-Agentを
+  許可するか、ボット対策のセンシティビティを見直すこと）。
 
 ## TODO
 

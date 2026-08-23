@@ -126,6 +126,9 @@ def send_events(server_url: str, api_key: str, events: list[dict[str, Any]]) -> 
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
+            # 既定のUser-Agent（Python-urllib/x.y）はCloudflare等のWAFにボットとして
+            # ブロックされることがあるため、明示的に設定する。
+            "User-Agent": "VRCDashboardAgent",
         },
     )
     try:

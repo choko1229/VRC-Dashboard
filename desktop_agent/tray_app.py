@@ -11,27 +11,15 @@ import webbrowser
 from pathlib import Path
 
 import pystray
-from PIL import Image, ImageDraw
 
-from desktop_agent import startup, updater
+from desktop_agent import branding, startup, updater
 from desktop_agent.config import AgentConfig, save_config
-from desktop_agent.device_pairing import pair_with_browser
+from desktop_agent.device_pairing import PairingError, pair_with_browser
 from desktop_agent.version import __version__
 
 logger = logging.getLogger("gamelog_watcher.tray")
 
 _UPDATE_CHECK_INTERVAL_SECONDS = 6 * 60 * 60
-
-
-def _build_icon_image() -> Image.Image:
-    """外部アセットを使わず、シンプルな円+"V"のアイコンをその場で生成する。"""
-    size = 64
-    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-    draw.ellipse((2, 2, size - 2, size - 2), fill=(139, 92, 246, 255))
-    draw.line((20, 22, 32, 44), fill=(255, 255, 255, 255), width=6)
-    draw.line((44, 22, 32, 44), fill=(255, 255, 255, 255), width=6)
-    return image
 
 
 def check_and_apply_update(exe_path: Path) -> bool:
@@ -85,7 +73,7 @@ def run_tray(*, config: AgentConfig, exe_path: Path | None) -> None:
 
     def on_check_update(icon: pystray.Icon, item: pystray.MenuItem) -> None:
         if exe_path is None:
-            icon.notify("開発実行では自動更新は利用できません。", "VRCダッシュボード連携ツール")
+            icon.notify("開発実行では自動更新は利用できません。", branding.APP_NAME)
             return
         try:
             updated = check_and_apply_update(exe_path)
@@ -93,31 +81,37 @@ def run_tray(*, config: AgentConfig, exe_path: Path | None) -> None:
             logger.exception("手動更新チェックで予期しないエラーが発生しました")
             return
         if not updated:
-            icon.notify("最新バージョンです。", "VRCダッシュボード連携ツール")
+            icon.notify("最新バージョンです。", branding.APP_NAME)
 
     def on_relogin(icon: pystray.Icon, item: pystray.MenuItem) -> None:
         icon.notify(
             "ブラウザが開きます。ログインしてコードを承認してください。",
-            "VRCダッシュボード連携ツール",
+            branding.APP_NAME,
         )
         try:
             token = pair_with_browser(config.server_url)
+        except PairingError as exc:
+            logger.warning("再ログインに失敗しました: %s", exc)
+            icon.notify(str(exc), branding.APP_NAME)
+            return
         except Exception:
-            logger.exception("再ログインに失敗しました")
-            icon.notify("ログインに失敗しました。", "VRCダッシュボード連携ツール")
+            logger.exception("再ログインで予期しないエラーが発生しました")
+            icon.notify("予期しないエラーが発生しました。", branding.APP_NAME)
             return
         if token is None:
-            icon.notify("承認されませんでした。", "VRCダッシュボード連携ツール")
+            icon.notify(
+                "承認されませんでした（タイムアウトまたは拒否）。", branding.APP_NAME
+            )
             return
 
         save_config(AgentConfig(server_url=config.server_url, api_key=token))
         if exe_path is None:
             icon.notify(
                 "ログインしました。開発実行のため手動で再起動してください。",
-                "VRCダッシュボード連携ツール",
+                branding.APP_NAME,
             )
             return
-        icon.notify("ログインしました。再起動します。", "VRCダッシュボード連携ツール")
+        icon.notify("ログインしました。再起動します。", branding.APP_NAME)
         subprocess.Popen([str(exe_path)], close_fds=True)
         os._exit(0)
 
@@ -127,7 +121,7 @@ def run_tray(*, config: AgentConfig, exe_path: Path | None) -> None:
     def on_toggle_startup(icon: pystray.Icon, item: pystray.MenuItem) -> None:
         if exe_path is None:
             icon.notify(
-                "開発実行ではスタートアップ登録は利用できません。", "VRCダッシュボード連携ツール"
+                "開発実行ではスタートアップ登録は利用できません。", branding.APP_NAME
             )
             return
         if startup.is_registered():
@@ -140,7 +134,7 @@ def run_tray(*, config: AgentConfig, exe_path: Path | None) -> None:
         icon.stop()
 
     menu = pystray.Menu(
-        pystray.MenuItem(f"VRCダッシュボード連携ツール v{__version__}", None, enabled=False),
+        pystray.MenuItem(f"{branding.APP_NAME} v{__version__}", None, enabled=False),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("ダッシュボードを開く", on_open_dashboard),
         pystray.MenuItem("ログインし直す", on_relogin),
@@ -151,6 +145,6 @@ def run_tray(*, config: AgentConfig, exe_path: Path | None) -> None:
     )
 
     icon = pystray.Icon(
-        "vrc_dashboard_agent", _build_icon_image(), "VRCダッシュボード連携ツール", menu
+        "vrc_dashboard_agent", branding.build_icon_image(), branding.APP_NAME, menu
     )
     icon.run()
