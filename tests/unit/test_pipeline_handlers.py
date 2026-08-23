@@ -23,7 +23,7 @@ async def test_on_friend_online_updates_friend(
             "userId": "usr_1",
             "user": {"id": "usr_1", "displayName": "Alice"},
             "location": "wrld_abc:12345",
-            "world": {"name": "Alice's World"},
+            "world": {"name": "Alice's World", "thumbnailImageUrl": "https://example.com/t.png"},
         }
         await pipeline._on_friend_online(db, sender, content)
 
@@ -32,6 +32,16 @@ async def test_on_friend_online_updates_friend(
         ).scalar_one()
         assert friend.is_online is True
         assert friend.current_world_name == "Alice's World"
+        assert friend.current_world_thumbnail_url == "https://example.com/t.png"
+
+
+def test_extract_world_thumbnail_url_falls_back_to_image_url() -> None:
+    assert (
+        pipeline._extract_world_thumbnail_url({"imageUrl": "https://example.com/full.png"})
+        == "https://example.com/full.png"
+    )
+    assert pipeline._extract_world_thumbnail_url(None) is None
+    assert pipeline._extract_world_thumbnail_url({}) is None
 
 
 async def test_on_friend_offline_updates_friend(

@@ -27,6 +27,8 @@ from app.schemas.vrchat import (
     VRChatGroupSummary,
     VRChatUser,
     VRChatWorld,
+    parse_instance_privacy_label,
+    parse_instance_region_flag,
     parse_world_id_from_location,
 )
 from app.services import app_config_service, vrchat_session_service
@@ -97,6 +99,54 @@ async def compute_activity_stats(db: AsyncSession, friend_id: int) -> ActivitySt
     )
 
 
+@dataclass
+class FriendInstanceGroup:
+    """フレンド一覧で、同じインスタンスにいるフレンドをまとめた1グループ。"""
+
+    location: str
+    world_name: str | None
+    world_thumbnail_url: str | None
+    region_flag: str
+    privacy_label: str
+    friend_count: int
+    friends: list[Friend]
+
+
+def group_online_friends_by_instance(
+    friends: list[Friend],
+) -> tuple[list[FriendInstanceGroup], list[Friend]]:
+    """オンラインのフレンドを現在のインスタンスごとにグループ化する。
+
+    現在地が判明している（locationが"private"/"traveling"/None以外の）フレンドを
+    人数の多いグループ順にまとめ、判明していないフレンドは2つ目の戻り値として
+    まとめて返す（フレンド一覧では、グループの後に続けて見出し無しで表示する）。
+    """
+    groups_by_location: dict[str, list[Friend]] = {}
+    unknown: list[Friend] = []
+
+    for friend in friends:
+        location = friend.current_location
+        if not location or location in ("offline", "private", "traveling"):
+            unknown.append(friend)
+            continue
+        groups_by_location.setdefault(location, []).append(friend)
+
+    groups = [
+        FriendInstanceGroup(
+            location=location,
+            world_name=members[0].current_world_name,
+            world_thumbnail_url=members[0].current_world_thumbnail_url,
+            region_flag=parse_instance_region_flag(location),
+            privacy_label=parse_instance_privacy_label(location),
+            friend_count=len(members),
+            friends=members,
+        )
+        for location, members in groups_by_location.items()
+    ]
+    groups.sort(key=lambda group: group.friend_count, reverse=True)
+    return groups, unknown
+
+
 async def _get_or_create_friend(db: AsyncSession, vrchat_user_id: str, display_name: str) -> Friend:
     result = await db.execute(select(Friend).where(Friend.vrchat_user_id == vrchat_user_id))
     friend = result.scalar_one_or_none()
@@ -154,6 +204,7 @@ async def bootstrap_friends_from_vrchat(
         else:
             friend.current_world_id = None
             friend.current_world_name = None
+            friend.current_world_thumbnail_url = None
             friend.current_location = None
         friend.last_updated_at = now
 
@@ -220,6 +271,7 @@ async def handle_friend_online(
     display_name: str,
     location: str | None,
     world_name: str | None,
+    world_thumbnail_url: str | None = None,
 ) -> None:
     friend = await _get_or_create_friend(db, vrchat_user_id, display_name)
     friend.display_name = display_name
@@ -228,6 +280,7 @@ async def handle_friend_online(
     world_id = parse_world_id_from_location(location)
     friend.current_world_id = world_id
     friend.current_world_name = world_name
+    friend.current_world_thumbnail_url = world_thumbnail_url
     friend.current_location = location
     now = datetime.now(UTC)
     friend.last_seen_online_at = now
@@ -272,6 +325,7 @@ async def handle_friend_active(
     friend.online_state = "active"
     friend.current_world_id = None
     friend.current_world_name = None
+    friend.current_world_thumbnail_url = None
     friend.current_location = None
     now = datetime.now(UTC)
     friend.last_seen_online_at = now
@@ -306,6 +360,7 @@ async def handle_friend_offline(
     friend.online_state = "offline"
     friend.current_world_id = None
     friend.current_world_name = None
+    friend.current_world_thumbnail_url = None
     friend.current_location = None
     now = datetime.now(UTC)
     friend.last_updated_at = now
@@ -339,6 +394,7 @@ async def handle_friend_location_change(
     display_name: str,
     location: str | None,
     world_name: str | None,
+    world_thumbnail_url: str | None = None,
 ) -> None:
     friend = await _get_or_create_friend(db, vrchat_user_id, display_name)
     world_id = parse_world_id_from_location(location)
@@ -346,6 +402,7 @@ async def handle_friend_location_change(
     friend.online_state = "online"
     friend.current_world_id = world_id
     friend.current_world_name = world_name
+    friend.current_world_thumbnail_url = world_thumbnail_url
     friend.current_location = location
     now = datetime.now(UTC)
     friend.last_updated_at = now

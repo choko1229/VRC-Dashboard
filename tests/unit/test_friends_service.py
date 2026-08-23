@@ -365,3 +365,37 @@ async def test_status_update_no_event_when_nothing_changed(
 
         events = (await db.execute(select(FriendPresenceEvent))).scalars().all()
         assert events == []
+
+
+def test_group_online_friends_by_instance_groups_by_location_and_sorts_by_size() -> None:
+    friend_a1 = Friend(vrchat_user_id="usr_a1", display_name="A1", current_location="wrld_a:1")
+    friend_a2 = Friend(vrchat_user_id="usr_a2", display_name="A2", current_location="wrld_a:1")
+    friend_b1 = Friend(vrchat_user_id="usr_b1", display_name="B1", current_location="wrld_b:1")
+    friend_private = Friend(vrchat_user_id="usr_p", display_name="P", current_location="private")
+    friend_unknown = Friend(vrchat_user_id="usr_u", display_name="U", current_location=None)
+
+    groups, unknown = friends_service.group_online_friends_by_instance(
+        [friend_a1, friend_a2, friend_b1, friend_private, friend_unknown]
+    )
+
+    assert [g.friend_count for g in groups] == [2, 1]
+    assert groups[0].location == "wrld_a:1"
+    assert groups[0].friends == [friend_a1, friend_a2]
+    assert groups[1].location == "wrld_b:1"
+    assert unknown == [friend_private, friend_unknown]
+
+
+def test_group_online_friends_by_instance_uses_first_member_world_info() -> None:
+    friend = Friend(
+        vrchat_user_id="usr_a1",
+        display_name="A1",
+        current_location="wrld_a:1~region(jp)",
+        current_world_name="テストワールド",
+        current_world_thumbnail_url="https://example.com/thumb.png",
+    )
+
+    groups, _unknown = friends_service.group_online_friends_by_instance([friend])
+
+    assert groups[0].world_name == "テストワールド"
+    assert groups[0].world_thumbnail_url == "https://example.com/thumb.png"
+    assert groups[0].region_flag == "🇯🇵"

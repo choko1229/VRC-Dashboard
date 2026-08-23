@@ -18,25 +18,21 @@
 </div>
 {% endif %}
 
-{% if sections.same_instance or sections.online %}
-<h2 class="friend-section-heading">
-    オンライン — {{ sections.online|length + (sections.same_instance.friend_count if sections.same_instance else 0) }}
-</h2>
-{% if sections.same_instance %}
+{% set online_total = sections.online_other|length + sections.instance_groups|sum(attribute="friend_count") %}
+{% if online_total %}
+<h2 class="friend-section-heading">オンライン — {{ online_total }}</h2>
+{% for group in sections.instance_groups %}
 <div class="friend-instance-header">
-    <span>{{ instance_region_flag(sections.same_instance.friends[0].current_location) }}</span>
-    <span>
-        {{ sections.same_instance.world_name or "不明なワールド" }}・{{ sections.same_instance.privacy_label }}
-        ({{ sections.same_instance.friend_count }}{% if sections.same_instance.instance_total is not none %}/{{ sections.same_instance.instance_total }}{% endif %})
-    </span>
+    <span>{{ group.region_flag }}</span>
+    <span>{{ group.world_name or "不明なワールド" }}・{{ group.privacy_label }}（{{ group.friend_count }}）</span>
 </div>
 <div class="friend-card-grid">
-    {% for friend in sections.same_instance.friends %}{{ friend_card(friend) }}{% endfor %}
+    {% for friend in group.friends %}{{ friend_card(friend) }}{% endfor %}
 </div>
-{% endif %}
-{% if sections.online %}
+{% endfor %}
+{% if sections.online_other %}
 <div class="friend-card-grid">
-    {% for friend in sections.online %}{{ friend_card(friend) }}{% endfor %}
+    {% for friend in sections.online_other %}{{ friend_card(friend) }}{% endfor %}
 </div>
 {% endif %}
 {% endif %}
@@ -48,7 +44,7 @@
 </div>
 {% endif %}
 
-{% if not sections.favorites and not sections.same_instance and not sections.online and not sections.offline %}
+{% if not sections.favorites and not online_total and not sections.offline %}
 <p class="placeholder">フレンドがいません。「VRChatと同期」を試してください。</p>
 {% endif %}
 

@@ -1,10 +1,13 @@
 {% from "partials/icons.html" import icon_edit %}
 {% macro friend_card(friend) %}
-<a class="friend-card-v2"
+<a class="friend-card-v2{% if friend.current_world_thumbnail_url %} friend-card-has-bg{% endif %}"
    href="/friends/{{ friend.id }}"
    hx-get="/friends/{{ friend.id }}/modal"
    hx-target="#friend-modal-body"
-   hx-swap="innerHTML">
+   hx-swap="innerHTML"
+   {% if friend.current_world_thumbnail_url %}
+   style="background-image: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,.35) 60%, rgba(0,0,0,.15)), url('{{ friend.current_world_thumbnail_url }}');"
+   {% endif %}>
     <span class="friend-card-avatar-wrap">
         {% if friend.current_avatar_thumbnail_url %}
         <img class="friend-card-avatar" src="{{ friend.current_avatar_thumbnail_url }}" alt="">

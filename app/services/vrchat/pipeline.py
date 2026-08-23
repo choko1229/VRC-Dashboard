@@ -34,6 +34,17 @@ UserAgentProvider = Callable[[], Awaitable[str]]
 SelfLocationSeeder = Callable[[str, str], Awaitable[None]]
 
 
+def _extract_world_thumbnail_url(world: Any) -> str | None:
+    """PipelineのworldオブジェクトからカードUIの背景に使うサムネイルURLを取り出す。
+
+    `thumbnailImageUrl`（小さいプレビュー用）を優先し、無ければ`imageUrl`にフォールバックする。
+    """
+    if not isinstance(world, dict):
+        return None
+    thumbnail = world.get("thumbnailImageUrl") or world.get("imageUrl")
+    return thumbnail if isinstance(thumbnail, str) else None
+
+
 async def _on_friend_online(
     db: AsyncSession, sender: NotificationSender, content: dict[str, Any]
 ) -> None:
@@ -54,6 +65,7 @@ async def _on_friend_online(
         display_name=str(display_name),
         location=location if isinstance(location, str) else None,
         world_name=world_name if isinstance(world_name, str) else None,
+        world_thumbnail_url=_extract_world_thumbnail_url(world),
     )
 
 
@@ -100,6 +112,7 @@ async def _on_friend_location(
         display_name=str(display_name),
         location=location if isinstance(location, str) else None,
         world_name=world_name if isinstance(world_name, str) else None,
+        world_thumbnail_url=_extract_world_thumbnail_url(world),
     )
 
 

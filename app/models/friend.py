@@ -32,6 +32,9 @@ class Friend(Base):
     status_message: Mapped[str | None] = mapped_column(String(255), default=None)
     current_world_id: Mapped[str | None] = mapped_column(String(100), default=None)
     current_world_name: Mapped[str | None] = mapped_column(String(255), default=None)
+    # Pipelineのfriend-online/friend-locationイベントに含まれるworldオブジェクトからのみ
+    # 取得できる（REST APIのフレンド一覧には含まれない）。フレンド一覧カードの背景に使う。
+    current_world_thumbnail_url: Mapped[str | None] = mapped_column(default=None)
     current_location: Mapped[str | None] = mapped_column(String(150), default=None)
     current_avatar_thumbnail_url: Mapped[str | None] = mapped_column(default=None)
     last_seen_online_at: Mapped[datetime | None] = mapped_column(

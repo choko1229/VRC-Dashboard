@@ -265,6 +265,22 @@ body {
     transform: translateY(-2px);
 }
 
+.friend-card-has-bg {
+    background-size: cover;
+    background-position: center;
+    color: #fff;
+}
+
+.friend-card-has-bg .friend-card-status-message,
+.friend-card-has-bg .friend-card-location {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.friend-card-has-bg .friend-card-avatar-placeholder {
+    background-color: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
 .friend-card-avatar-wrap {
     position: relative;
     flex-shrink: 0;

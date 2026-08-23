@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
@@ -24,11 +24,10 @@ from app.schemas.vrchat import parse_trust_rank, resolve_profile_image_url
 from app.services import (
     app_config_service,
     friends_service,
-    sidebar_service,
     vrchat_session_service,
     vrchat_sync_service,
 )
-from app.services.sidebar_service import SameInstanceGroup
+from app.services.friends_service import FriendInstanceGroup
 from app.services.vrchat.client import VRChatAPIError, VRChatClient
 
 logger = logging.getLogger(__name__)
@@ -44,48 +43,39 @@ class FriendSections:
 
     お気に入り（いずれかのグループに所属）は状態を問わず最優先で分類し、
     残りをオンライン状態（online/active）かオフラインかで振り分ける。
-    オンライン区分の中では、自分と同じインスタンスにいるフレンドを別枠にまとめる。
+    オンライン区分では、フレンドを現在のインスタンスごとにグループ化し
+    （人数の多いグループ順）、インスタンスが不明なフレンドをその後に続けて表示する
+    （見出しでの区分はしない）。
     """
 
     favorites: list[Friend]
-    same_instance: SameInstanceGroup | None
-    online: list[Friend]
+    instance_groups: list[FriendInstanceGroup]
+    online_other: list[Friend]
     offline: list[Friend]
 
 
-async def _fetch_friend_sections(db: AsyncSession, cipher: SecretCipher) -> FriendSections:
+async def _fetch_friend_sections(db: AsyncSession) -> FriendSections:
     all_friends_result = await db.execute(select(Friend).order_by(Friend.display_name))
     all_friends = list(all_friends_result.scalars().all())
 
     favorite_ids_result = await db.execute(select(FriendGroupMembership.friend_id).distinct())
     favorite_ids = set(favorite_ids_result.scalars().all())
 
-    sidebar_groups = await sidebar_service.get_friend_sidebar_groups(db, cipher)
-    same_instance = sidebar_groups.same_instance
-    same_instance_ids: set[int] = set()
-    if same_instance is not None:
-        non_favorite = [f for f in same_instance.friends if f.id not in favorite_ids]
-        if non_favorite:
-            same_instance = replace(
-                same_instance, friends=non_favorite, friend_count=len(non_favorite)
-            )
-            same_instance_ids = {f.id for f in non_favorite}
-        else:
-            same_instance = None
-
     favorites = [f for f in all_friends if f.id in favorite_ids]
     online = [
-        f
-        for f in all_friends
-        if f.id not in favorite_ids
-        and f.id not in same_instance_ids
-        and f.online_state != "offline"
+        f for f in all_friends if f.id not in favorite_ids and f.online_state != "offline"
     ]
     offline = [
         f for f in all_friends if f.id not in favorite_ids and f.online_state == "offline"
     ]
+
+    instance_groups, online_other = friends_service.group_online_friends_by_instance(online)
+
     return FriendSections(
-        favorites=favorites, same_instance=same_instance, online=online, offline=offline
+        favorites=favorites,
+        instance_groups=instance_groups,
+        online_other=online_other,
+        offline=offline,
     )
 
 
@@ -109,9 +99,8 @@ async def _fetch_friend_group_ids(db: AsyncSession, friend_id: int) -> set[int]:
 async def friends_page(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    cipher: SecretCipher = Depends(get_cipher),
 ) -> HTMLResponse:
-    sections = await _fetch_friend_sections(db, cipher)
+    sections = await _fetch_friend_sections(db)
     return templates.TemplateResponse(request, "friends/list.html", {"sections": sections})
 
 
