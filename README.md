@@ -12,9 +12,11 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
 - **フレンド状況**: VRChatの認証情報を保存し、Pipeline（WebSocket）でフレンドのオンライン/
   オフライン・ワールド移動をリアルタイムに反映。
   - 右サイドバーは全フレンド（上限100人、オンライン優先で切り詰め）を常時表示し、
-    「同じインスタンス／オンライン／アクティブ／オフライン」に区分（オフラインのみ
-    デフォルト折りたたみ）。開閉状態はポーリング更新後も維持され、下部に一覧ページへの
-    リンクがある。
+    「オンライン／アクティブ／オフライン」に区分（オフラインのみデフォルト折りたたみ）。
+    オンライン区分はフレンド一覧ページと同じロジック
+    （`friends_service.group_online_friends_by_instance`）でインスタンスごとに
+    グループ化し、インスタンス不明なフレンドはグループの後に見出し無しで続けて表示する。
+    開閉状態はポーリング更新後も維持され、下部に一覧ページへのリンクがある。
   - フレンド一覧ページ（`/friends`）は絞り込みタブなしで、「お気に入り／オンライン／
     オフライン」の3区分を常に一括表示するVRChat公式アプリ風のカード一覧。お気に入り
     （いずれかのグループに所属）は状態を問わず最優先で表示する。オンライン区分は
@@ -165,17 +167,21 @@ tests/                  # unit / integration
 - フォントは全て「LINE Seed JP」（Th/Rg/Bd/Eb）に統一している。
 - VRChatの認証情報・Discord OAuthシークレット・VAPID秘密鍵はFernetで暗号化してDBに保存する
   （暗号鍵は `FERNET_MASTER_KEY` 未設定時 `data/fernet.key` に自動生成・永続化される）。
-- サイドバーの「同じインスタンス」区分は、Pipelineの`user-location`イベント（自分自身の現在地）
-  とフレンドの`current_location`を突き合わせて判定し、インスタンス総人数は
-  `GET /instances/{location}` から取得する。`friend-active`イベント（ワールド非滞在での接続中
-  状態）や`user-location`はコミュニティ整備の非公式ドキュメントに基づく実装。本番環境での
-  実動作確認により、`GET /instances/{location}`のlocationは`:`・`~`・`()`を percent-encode
-  すると400 Bad Requestになる（生のまま渡す必要がある）ことが判明し修正済み
+- フレンド一覧／サイドバーの「オンライン」区分は、各フレンドの`current_location`を突き合わせて
+  インスタンスごとにグループ化する（`friends_service.group_online_friends_by_instance`。人数の
+  多いグループ順、判明していないフレンドは見出し無しで末尾）。VRChat側のインスタンス総人数
+  （`GET /instances/{location}`、`VRChatClient.get_instance`）は多数の異なるインスタンスに対して
+  都度APIを叩くことになりレート制限のリスクがあるため、あえて取得・表示していない。
+  本番環境での実動作確認により、`GET /instances/{location}`のlocationは`:`・`~`・`()`を
+  percent-encodeすると400 Bad Requestになる（生のまま渡す必要がある）ことが判明し修正済み
   （`app/services/vrchat/client.py`の`_encode_instance_location`参照）。
+- `vrchat_session.self_location`はPipelineの`user-location`イベント（自分自身の現在地）で
+  更新され続けているが、現状どの画面からも参照していない（フレンドのグループ化は各フレンド
+  自身の`current_location`のみで完結するため）。`friend-active`イベント（ワールド非滞在での
+  接続中状態）や`user-location`はコミュニティ整備の非公式ドキュメントに基づく実装。
   - `user-location`イベントは実際にワールドを移動した瞬間にしか送られないため、Pipeline接続
     時点で既にどこかのワールドに滞在している場合は次に移動するまで`self_location`が`None`の
-    ままとなり「同じインスタンス」区分が機能しない不具合があった。接続確立時に
-    `GET /auth/user`から現在地を取得して`self_location`を補完することで解消した
+    ままになる。接続確立時に`GET /auth/user`から現在地を取得して補完している
     （`app/services/vrchat/pipeline.py`の`_default_seed_self_location`参照。テストでは
     実ネットワーク呼び出しを避けるため`PipelineManager`の`seed_self_location`引数で
     差し替え可能にしている）。

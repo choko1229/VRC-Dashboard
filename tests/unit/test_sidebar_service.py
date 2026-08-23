@@ -1,39 +1,16 @@
-"""フェーズ7: サイドバーのフレンド区分（同じインスタンス/オンライン/アクティブ/オフライン）。"""
+"""フェーズ7/16: サイドバーのフレンド区分（オンライン(インスタンス別)/アクティブ/オフライン）。"""
 
 from __future__ import annotations
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.security import SecretCipher
 from app.models.friend import Friend
-from app.schemas.vrchat import VRChatInstance
-from app.services import sidebar_service, vrchat_session_service
-from app.services.vrchat.client import VRChatClient
-
-_TEST_FERNET_KEY = "gdsF_NX-iLtl8QLOwmQyFeEdQtOmWXiAlHD4kTrLuh4="
+from app.services import sidebar_service
 
 
-async def _setup_self_session(
-    db: AsyncSession, cipher: SecretCipher, *, self_location: str | None
-) -> None:
-    await vrchat_session_service.save_session(
-        db,
-        cipher,
-        vrchat_user_id="usr_self",
-        vrchat_display_name="Self",
-        auth_cookie="dummy-auth-cookie",
-        two_factor_cookie=None,
-    )
-    await vrchat_session_service.update_self_location(
-        db, location=self_location, world_id="wrld_shared", world_name="共有ワールド"
-    )
-
-
-async def test_groups_friends_without_self_location(
+async def test_groups_friends_by_state(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    cipher = SecretCipher(_TEST_FERNET_KEY)
     async with db_session_factory() as db:
         db.add(
             Friend(
@@ -63,10 +40,11 @@ async def test_groups_friends_without_self_location(
         )
         await db.commit()
 
-        groups = await sidebar_service.get_friend_sidebar_groups(db, cipher)
+        groups = await sidebar_service.get_friend_sidebar_groups(db)
 
-        assert groups.same_instance is None
-        assert [f.vrchat_user_id for f in groups.online] == ["usr_online"]
+        assert [g.friend_count for g in groups.instance_groups] == [1]
+        assert [f.vrchat_user_id for f in groups.instance_groups[0].friends] == ["usr_online"]
+        assert groups.online_other == []
         assert [f.vrchat_user_id for f in groups.active] == ["usr_active"]
         assert [f.vrchat_user_id for f in groups.offline] == ["usr_offline"]
 
@@ -76,7 +54,6 @@ async def test_friend_limit_prioritizes_online_over_offline(
 ) -> None:
     from app.services.sidebar_service import _SIDEBAR_FRIEND_LIMIT
 
-    cipher = SecretCipher(_TEST_FERNET_KEY)
     extra_offline_count = _SIDEBAR_FRIEND_LIMIT + 5
 
     async with db_session_factory() as db:
@@ -100,36 +77,28 @@ async def test_friend_limit_prioritizes_online_over_offline(
         )
         await db.commit()
 
-        groups = await sidebar_service.get_friend_sidebar_groups(db, cipher)
+        groups = await sidebar_service.get_friend_sidebar_groups(db)
 
         total_returned = (
-            len(groups.online)
+            sum(g.friend_count for g in groups.instance_groups)
+            + len(groups.online_other)
             + len(groups.active)
             + len(groups.offline)
-            + (groups.same_instance.friend_count if groups.same_instance else 0)
         )
         assert total_returned == _SIDEBAR_FRIEND_LIMIT
         # 上限を超えても、オンラインのフレンドは切り詰められずに残る。
-        assert [f.vrchat_user_id for f in groups.online] == ["usr_online_priority"]
+        assert [f.vrchat_user_id for f in groups.instance_groups[0].friends] == [
+            "usr_online_priority"
+        ]
         assert len(groups.offline) == _SIDEBAR_FRIEND_LIMIT - 1
 
 
-async def test_groups_same_instance_friends_with_instance_population(
+async def test_groups_friends_by_instance_known_first_unknown_after(
     db_session_factory: async_sessionmaker[AsyncSession],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    cipher = SecretCipher(_TEST_FERNET_KEY)
     shared_location = "wrld_shared:99999~friends(usr_self)~region(us)"
 
-    async def fake_get_instance(self: VRChatClient, location: str) -> VRChatInstance:
-        assert location == shared_location
-        return VRChatInstance(n_users=12)
-
-    monkeypatch.setattr(VRChatClient, "get_instance", fake_get_instance)
-
     async with db_session_factory() as db:
-        await _setup_self_session(db, cipher, self_location=shared_location)
-
         db.add(
             Friend(
                 vrchat_user_id="usr_same_1",
@@ -160,17 +129,25 @@ async def test_groups_same_instance_friends_with_instance_population(
                 current_world_name="別のワールド",
             )
         )
+        db.add(
+            Friend(
+                vrchat_user_id="usr_private",
+                display_name="非公開D",
+                is_online=True,
+                online_state="online",
+                current_location="private",
+            )
+        )
         await db.commit()
 
-        groups = await sidebar_service.get_friend_sidebar_groups(db, cipher)
+        groups = await sidebar_service.get_friend_sidebar_groups(db)
 
-        assert groups.same_instance is not None
-        assert groups.same_instance.friend_count == 2
-        assert groups.same_instance.instance_total == 12
-        assert groups.same_instance.world_name == "共有ワールド"
-        assert groups.same_instance.privacy_label == "フレンド+"
-        assert {f.vrchat_user_id for f in groups.same_instance.friends} == {
+        # 人数の多いインスタンスグループが上位、インスタンス不明なフレンドは末尾。
+        assert [g.friend_count for g in groups.instance_groups] == [2, 1]
+        assert groups.instance_groups[0].world_name == "共有ワールド"
+        assert {f.vrchat_user_id for f in groups.instance_groups[0].friends} == {
             "usr_same_1",
             "usr_same_2",
         }
-        assert [f.vrchat_user_id for f in groups.online] == ["usr_elsewhere"]
+        assert [f.vrchat_user_id for f in groups.instance_groups[1].friends] == ["usr_elsewhere"]
+        assert [f.vrchat_user_id for f in groups.online_other] == ["usr_private"]

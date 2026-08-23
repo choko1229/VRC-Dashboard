@@ -935,6 +935,25 @@ body {
     transform: translateX(-2px);
 }
 
+.sidebar-friend-link-has-bg {
+    background-size: cover;
+    background-position: center;
+    color: #fff;
+}
+
+.sidebar-friend-link-has-bg .sidebar-friend-world {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.sidebar-friend-link-has-bg .sidebar-friend-thumb-placeholder {
+    background-color: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.sidebar-friend-link-has-bg:hover {
+    background-color: transparent;
+}
+
 .sidebar-friend-thumb {
     width: 36px;
     height: 36px;

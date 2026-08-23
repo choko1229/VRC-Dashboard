@@ -9,8 +9,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_cipher, get_current_user
-from app.core.security import SecretCipher
+from app.core.deps import get_current_user
 from app.core.templating import templates
 from app.db.session import get_db
 from app.models.avatar import Avatar
@@ -31,14 +30,13 @@ async def dashboard_home(
 async def friends_sidebar(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    cipher: SecretCipher = Depends(get_cipher),
 ) -> HTMLResponse:
     """全ページ共通の右サイドバーに表示するオンラインフレンド一覧（partials/friends_sidebar.html）。
 
-    「同じインスタンス/オンライン/アクティブ」に区分して表示する
+    「オンライン(インスタンス別)/アクティブ/オフライン」に区分して表示する
     （app.services.sidebar_service参照）。
     """
-    groups = await sidebar_service.get_friend_sidebar_groups(db, cipher)
+    groups = await sidebar_service.get_friend_sidebar_groups(db)
     return templates.TemplateResponse(
         request, "partials/_friends_sidebar_list.html", {"groups": groups}
     )

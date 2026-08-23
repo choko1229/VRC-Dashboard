@@ -1,6 +1,9 @@
 {% macro friend_row(friend, show_location) %}
 <li>
-    <a href="/friends/{{ friend.id }}" class="sidebar-friend-link">
+    <a href="/friends/{{ friend.id }}" class="sidebar-friend-link{% if friend.current_world_thumbnail_url %} sidebar-friend-link-has-bg{% endif %}"
+        {% if friend.current_world_thumbnail_url %}
+        style="background-image: linear-gradient(to right, rgba(0,0,0,.72) 40%, rgba(0,0,0,.25)), url('{{ friend.current_world_thumbnail_url }}');"
+        {% endif %}>
         {% if friend.current_avatar_thumbnail_url %}
         <img src="{{ friend.current_avatar_thumbnail_url }}" class="sidebar-friend-thumb" alt="">
         {% else %}
@@ -20,29 +23,27 @@
 </li>
 {% endmacro %}
 
-{% if not groups.same_instance and not groups.online and not groups.active and not groups.offline %}
+{% set online_total = groups.online_other|length + groups.instance_groups|sum(attribute="friend_count") %}
+{% if not online_total and not groups.active and not groups.offline %}
 <p class="placeholder">フレンドがいません。</p>
 {% endif %}
 
-{% if groups.same_instance %}
-<details id="sidebar-group-same-instance" class="sidebar-group" open>
-    <summary>同じインスタンス — {{ groups.same_instance.friend_count }}</summary>
+{% if online_total %}
+<details id="sidebar-group-online" class="sidebar-group" open>
+    <summary>オンライン — {{ online_total }}</summary>
+    {% for group in groups.instance_groups %}
     <p class="sidebar-instance-info">
-        {{ groups.same_instance.world_name or "不明なワールド" }}・{{ groups.same_instance.privacy_label }}
-        ({{ groups.same_instance.friend_count }}{% if groups.same_instance.instance_total is not none %}/{{ groups.same_instance.instance_total }}{% endif %})
+        {{ group.region_flag }} {{ group.world_name or "不明なワールド" }}・{{ group.privacy_label }}（{{ group.friend_count }}）
     </p>
     <ul class="sidebar-friends-list">
-        {% for friend in groups.same_instance.friends %}{{ friend_row(friend, false) }}{% endfor %}
+        {% for friend in group.friends %}{{ friend_row(friend, false) }}{% endfor %}
     </ul>
-</details>
-{% endif %}
-
-{% if groups.online %}
-<details id="sidebar-group-online" class="sidebar-group" open>
-    <summary>オンライン — {{ groups.online|length }}</summary>
+    {% endfor %}
+    {% if groups.online_other %}
     <ul class="sidebar-friends-list">
-        {% for friend in groups.online %}{{ friend_row(friend, true) }}{% endfor %}
+        {% for friend in groups.online_other %}{{ friend_row(friend, true) }}{% endfor %}
     </ul>
+    {% endif %}
 </details>
 {% endif %}
 
