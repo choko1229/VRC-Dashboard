@@ -421,8 +421,9 @@ def test_group_online_friends_by_instance_groups_by_location_and_sorts_by_size()
     assert groups[0].location == "wrld_a:1"
     assert groups[0].friends == [friend_a1, friend_a2, friend_a3]
     assert groups[1].location == "wrld_b:1"
-    # インスタンスに1人しかいないフレンドは、不明なフレンドと同様に末尾へまとめる。
-    assert unknown == [friend_private, friend_unknown, friend_alone]
+    # インスタンスに1人しかいないフレンドはグループの後にまとめるが、現在地が本当に
+    # 不明なフレンドより先に表示する（インスタンスがわかっている人を上位にする要件のため）。
+    assert unknown == [friend_alone, friend_private, friend_unknown]
 
 
 def test_group_online_friends_by_instance_uses_first_member_world_info() -> None:

@@ -121,21 +121,24 @@ def group_online_friends_by_instance(
     現在地が不明（locationが"private"/"traveling"/None）なフレンドと、そのインスタンスに
     自分しかいない（1人だけの）フレンドは、2つ目の戻り値としてまとめて返す
     （フレンド一覧では、グループの後に見出し無しで続けて表示する）。
+    このとき、インスタンスが判明している（1人だけの）フレンドを先に、現在地が本当に不明な
+    フレンドを後にする（「インスタンスがわかっている人を上位に」という要件のため）。
     """
     groups_by_location: dict[str, list[Friend]] = {}
-    unknown: list[Friend] = []
+    unknown_location: list[Friend] = []
 
     for friend in friends:
         location = friend.current_location
         if not location or location in ("offline", "private", "traveling"):
-            unknown.append(friend)
+            unknown_location.append(friend)
             continue
         groups_by_location.setdefault(location, []).append(friend)
 
     groups: list[FriendInstanceGroup] = []
+    known_singles: list[Friend] = []
     for location, members in groups_by_location.items():
         if len(members) < 2:
-            unknown.extend(members)
+            known_singles.extend(members)
             continue
         groups.append(
             FriendInstanceGroup(
@@ -149,7 +152,7 @@ def group_online_friends_by_instance(
             )
         )
     groups.sort(key=lambda group: group.friend_count, reverse=True)
-    return groups, unknown
+    return groups, known_singles + unknown_location
 
 
 async def _get_or_create_friend(db: AsyncSession, vrchat_user_id: str, display_name: str) -> Friend:
