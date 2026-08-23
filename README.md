@@ -216,6 +216,13 @@ tests/                  # unit / integration
 ## 補足
 
 - フォントは全て「LINE Seed JP」（Th/Rg/Bd/Eb）に統一している。
+- SQLiteは`app.db.base.create_engine_and_sessionmaker`の接続時フックで
+  `PRAGMA journal_mode=WAL`・`PRAGMA busy_timeout=30000`・`PRAGMA synchronous=NORMAL`を
+  設定している。既定のジャーナルモード（DELETE）は書き込み中に読み取りもブロックするため、
+  本番でPipelineイベント処理と複数リクエストの同時DBアクセスが重なると
+  `sqlite3.OperationalError: database is locked`が頻発する不具合があった
+  （WAL化で読み取り/書き込みを並行させ、busy_timeoutでロック解放を待ってからリトライする
+  ようにして解消）。
 - 日時系のDBカラムは全てUTCで保存する（`datetime.now(UTC)`。SQLiteは読み出し時にtzinfoを
   落とすため、書き込み時と同じUTCとして扱う必要がある——本アプリで繰り返し出てくる注意点）。
   画面表示は日本時間の利用者を想定しているため、テンプレート側で生の`.strftime()`を呼ぶと
