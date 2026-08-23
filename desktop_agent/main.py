@@ -25,6 +25,7 @@ truststore.inject_into_ssl()
 # `desktop_agent`パッケージを絶対importできるようにする。
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from desktop_agent.command_poller import run_forever as run_command_poller  # noqa: E402
 from desktop_agent.config import load_config, save_config  # noqa: E402
 from desktop_agent.first_run_dialog import prompt_for_config  # noqa: E402
 from desktop_agent.gamelog_watcher import GameLogWatcher, default_log_dir  # noqa: E402
@@ -78,6 +79,11 @@ def main() -> None:
     )
     watcher_thread = threading.Thread(target=watcher.run_forever, daemon=True)
     watcher_thread.start()
+
+    command_poller_thread = threading.Thread(
+        target=run_command_poller, args=(config.server_url, config.api_key), daemon=True
+    )
+    command_poller_thread.start()
 
     run_tray(config=config, exe_path=exe_path)
 

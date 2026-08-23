@@ -1,4 +1,4 @@
-{% from "partials/icons.html" import icon_home, icon_users, icon_avatar, icon_calendar, icon_settings, icon_logout, icon_sun, icon_moon, icon_admin, icon_play, icon_activity %}
+{% from "partials/icons.html" import icon_home, icon_users, icon_avatar, icon_calendar, icon_settings, icon_logout, icon_sun, icon_moon, icon_admin, icon_play, icon_activity, icon_bell %}
 {% if request.cookies.get("vrc_dashboard_session") %}
 {% set current_user = current_dashboard_user(request) %}
 <nav class="app-nav">
@@ -7,6 +7,7 @@
         <a href="/" title="ダッシュボード" class="nav-link">{{ icon_home() }}<span>ホーム</span></a>
         <a href="/friends" title="フレンド" class="nav-link">{{ icon_users() }}<span>フレンド</span></a>
         <a href="/feed" title="フィード" class="nav-link">{{ icon_activity() }}<span>フィード</span></a>
+        <a href="/notifications" title="通知" class="nav-link">{{ icon_bell() }}<span>通知</span></a>
         <a href="/avatars" title="アバター" class="nav-link">{{ icon_avatar() }}<span>アバター</span></a>
         <a href="/schedule" title="予定" class="nav-link">{{ icon_calendar() }}<span>予定</span></a>
         <a href="/game-log" title="ゲームログ" class="nav-link">{{ icon_play() }}<span>ログ</span></a>

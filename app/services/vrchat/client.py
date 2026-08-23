@@ -20,6 +20,7 @@ from app.schemas.vrchat import (
     VRChatFavoriteGroup,
     VRChatGroupSummary,
     VRChatInstance,
+    VRChatNotificationDto,
     VRChatUser,
     VRChatWorld,
 )
@@ -298,3 +299,38 @@ class VRChatClient:
             "GET", f"/users/{vrchat_user_id}/worlds", params={"n": 100}
         )
         return [VRChatWorld.model_validate(item) for item in response.json()]
+
+    async def get_notifications(self) -> list[VRChatNotificationDto]:
+        """通知一覧（v1）を取得する（起動時/手動同期時のバックフィル用）。
+
+        エンドポイント: GET /auth/user/notifications。Pipelineのnotification-v2系や
+        economy-update等、v1に対応しないイベント種別はここでは取得できない
+        （Pipeline接続時のみ受信できる）。
+        """
+        response = await self._request("GET", "/auth/user/notifications", params={"n": 100})
+        return [VRChatNotificationDto.model_validate(item) for item in response.json()]
+
+    async def respond_to_invite(self, notification_id: str, *, response_slot: int = 0) -> None:
+        """招待/招待リクエスト通知に応答する（招待リクエストへの承諾＝招待を送り返す）。
+
+        エンドポイント: POST /invite/{notificationId}/response。
+        """
+        await self._request(
+            "POST",
+            f"/invite/{notification_id}/response",
+            json={"responseSlot": response_slot},
+        )
+
+    async def accept_friend_request(self, notification_id: str) -> None:
+        """フレンドリクエスト通知を承諾する。
+
+        エンドポイント: PUT /auth/user/notifications/{id}/accept。
+        """
+        await self._request("PUT", f"/auth/user/notifications/{notification_id}/accept")
+
+    async def hide_notification(self, notification_id: str) -> None:
+        """通知を削除（既読/非表示）する。
+
+        エンドポイント: PUT /auth/user/notifications/{id}/hide。
+        """
+        await self._request("PUT", f"/auth/user/notifications/{notification_id}/hide")

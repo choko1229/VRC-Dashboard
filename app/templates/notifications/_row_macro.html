@@ -1,0 +1,41 @@
+{% from "partials/icons.html" import icon_trash %}
+{% macro notification_row(entry) %}
+{% set action = notification_type_action(entry.notification_type) %}
+<tr class="notification-row" id="notification-row-{{ entry.id }}">
+    <td class="notification-cell-date">{{ entry.occurred_at.strftime("%m/%d %H:%M") }}</td>
+    <td>
+        <span class="notification-type-badge">{{ notification_type_label(entry.notification_type) }}</span>
+    </td>
+    <td class="notification-cell-user">{{ entry.sender_display_name or "" }}</td>
+    <td class="notification-cell-group">{{ entry.group_name or "" }}</td>
+    <td class="notification-cell-image">
+        {% if entry.image_url %}
+        <img src="{{ entry.image_url }}" class="notification-image-thumb" alt="">
+        {% endif %}
+    </td>
+    <td class="notification-cell-message">{{ entry.message or "" }}</td>
+    <td class="notification-cell-action">
+        <span class="notification-cell-action-inner">
+        {% if action == "join" and entry.location %}
+        <button type="button" class="btn btn-ghost btn-sm"
+            hx-post="/notifications/{{ entry.id }}/accept"
+            hx-target="closest tr" hx-swap="outerHTML">参加</button>
+        {% elif action == "accept_friend" %}
+        <button type="button" class="btn btn-ghost btn-sm"
+            hx-post="/notifications/{{ entry.id }}/accept"
+            hx-target="closest tr" hx-swap="outerHTML">承諾</button>
+        <button type="button" class="icon-btn" title="拒否"
+            hx-post="/notifications/{{ entry.id }}/decline"
+            hx-target="closest tr" hx-swap="outerHTML">✕</button>
+        {% elif action == "respond_invite" %}
+        <button type="button" class="btn btn-ghost btn-sm"
+            hx-post="/notifications/{{ entry.id }}/accept"
+            hx-target="closest tr" hx-swap="outerHTML">招待を送る</button>
+        {% endif %}
+        <button type="button" class="icon-btn" title="削除"
+            hx-delete="/notifications/{{ entry.id }}"
+            hx-target="closest tr" hx-swap="outerHTML">{{ icon_trash(16) }}</button>
+        </span>
+    </td>
+</tr>
+{% endmacro %}

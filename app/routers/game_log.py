@@ -12,12 +12,19 @@ from app.core.deps import get_current_admin_user, get_current_user, require_game
 from app.core.templating import templates
 from app.db.session import get_db
 from app.schemas.game_log import (
+    AgentCommandAckRequest,
+    AgentCommandOut,
     DeviceCodeResponse,
     DevicePollRequest,
     DevicePollResponse,
     GameLogIngestRequest,
 )
-from app.services import device_auth_service, game_log_agent_token_service, game_log_service
+from app.services import (
+    agent_command_service,
+    device_auth_service,
+    game_log_agent_token_service,
+    game_log_service,
+)
 
 router = APIRouter()
 
@@ -198,3 +205,31 @@ async def ingest_game_log_events(
 ) -> JSONResponse:
     await game_log_service.ingest_events(db, payload.events)
     return JSONResponse({"accepted": len(payload.events)})
+
+
+@router.get(
+    "/api/agent/commands",
+    dependencies=[Depends(require_game_log_api_key)],
+)
+async def list_agent_commands(db: AsyncSession = Depends(get_db)) -> list[AgentCommandOut]:
+    """デスクトップエージェントがPC側操作の委譲（VRChat起動等）をポーリングする。
+
+    認証はゲームログ取り込みと同じエージェントトークン（require_game_log_api_key）を使う
+    （有効なエージェントトークンであることの検証のみで、用途はゲームログに限らない）。
+    """
+    commands = await agent_command_service.list_pending(db)
+    return [
+        AgentCommandOut(id=c.id, command_type=c.command_type, payload_json=c.payload_json)
+        for c in commands
+    ]
+
+
+@router.post(
+    "/api/agent/commands/{command_id}/ack",
+    dependencies=[Depends(require_game_log_api_key)],
+)
+async def ack_agent_command(
+    command_id: int, payload: AgentCommandAckRequest, db: AsyncSession = Depends(get_db)
+) -> JSONResponse:
+    found = await agent_command_service.ack(db, command_id, status=payload.status)
+    return JSONResponse({"ok": found}, status_code=200 if found else 404)

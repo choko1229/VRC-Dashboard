@@ -55,3 +55,15 @@ class DevicePollResponse(BaseModel):
     # expired_or_unknown: 期限切れまたは存在しないdevice_code
     status: Literal["pending", "approved", "denied", "expired_or_unknown"]
     token: str | None = None
+
+
+class AgentCommandOut(BaseModel):
+    """GET /api/agent/commands の1件（デスクトップエージェントへのPC側操作の委譲）。"""
+
+    id: int
+    command_type: str
+    payload_json: str
+
+
+class AgentCommandAckRequest(BaseModel):
+    status: Literal["done", "failed"]

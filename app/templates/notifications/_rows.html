@@ -1,0 +1,17 @@
+{% from "notifications/_row_macro.html" import notification_row %}
+{% for entry in entries %}{{ notification_row(entry) }}{% endfor %}
+{% if has_more %}
+<tr class="notification-load-more-row"
+    hx-get="/notifications/rows"
+    hx-trigger="revealed"
+    hx-vals='{"notification_type": {{ notification_type|tojson }}, "q": {{ search|tojson }}, "sort_dir": {{ sort_dir|tojson }}, "page": {{ next_page }}}'
+    hx-target="this" hx-swap="outerHTML">
+    <td colspan="7">
+        <span class="notification-load-more-spinner">読み込み中...</span>
+    </td>
+</tr>
+{% elif not entries %}
+<tr>
+    <td colspan="7" class="placeholder">通知がありません。</td>
+</tr>
+{% endif %}

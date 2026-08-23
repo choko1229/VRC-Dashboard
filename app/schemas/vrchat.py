@@ -117,6 +117,25 @@ class VRChatWorld(BaseModel):
     thumbnail_image_url: str | None = Field(default=None, alias="thumbnailImageUrl")
 
 
+class VRChatNotificationDto(BaseModel):
+    """`GET /auth/user/notifications`（v1）の1件。バックフィル取込用。
+
+    detailsは通知種別ごとに形が異なる"OneOf"（VRChat非公式ドキュメントでも未展開）のため、
+    dictのまま保持し、呼び出し側（vrchat_notification_service）で種別ごとに寛容にパースする。
+    """
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: str
+    type: str
+    sender_user_id: str | None = Field(default=None, alias="senderUserId")
+    sender_username: str | None = Field(default=None, alias="senderUsername")
+    message: str | None = None
+    details: dict[str, object] = Field(default_factory=dict)
+    seen: bool = False
+    created_at: datetime = Field(alias="created_at")
+
+
 class VRChatGroupSummary(BaseModel):
     """`GET /users/{id}/groups` の1件（そのユーザーが公開しているVRChatグループ所属）。"""
 

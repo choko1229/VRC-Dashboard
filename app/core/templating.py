@@ -13,6 +13,7 @@ from app.schemas.vrchat import (
     parse_instance_region_flag,
     parse_platform_label,
 )
+from app.services.vrchat_notification_service import get_type_action, get_type_label
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -38,3 +39,5 @@ templates.env.globals["instance_privacy_label"] = parse_instance_privacy_label
 templates.env.globals["instance_region_flag"] = parse_instance_region_flag
 templates.env.globals["status_dot_class"] = status_dot_class
 templates.env.globals["platform_label"] = parse_platform_label
+templates.env.globals["notification_type_label"] = get_type_label
+templates.env.globals["notification_type_action"] = get_type_action

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -20,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.notifications.base import NotificationPayload, NotificationSender
 from app.schemas.vrchat import VRChatUser, parse_world_id_from_location
-from app.services import friends_service, vrchat_session_service
+from app.services import friends_service, vrchat_notification_service, vrchat_session_service
 from app.services.vrchat.client import VRChatClient
 
 logger = logging.getLogger(__name__)
@@ -146,6 +147,18 @@ async def _on_user_location(
     )
 
 
+async def _on_vrchat_notification_event(
+    db: AsyncSession, _sender: NotificationSender, content: dict[str, Any], *, event_type: str
+) -> None:
+    """VRChat自体の通知ログ（招待/フレンドリクエスト/グループイベント等）への取込。
+
+    複数のPipelineイベント種別を1つの汎用ハンドラで受け、実際の解釈は
+    vrchat_notification_service.ingest()に委譲する（app.services.vrchat_notification_service
+    参照。仕様が非公開なイベント種別も多いため、そちらで防御的にパースする）。
+    """
+    await vrchat_notification_service.ingest(db, pipeline_event=event_type, content=content)
+
+
 _EVENT_HANDLERS: dict[str, EventHandler] = {
     "friend-online": _on_friend_online,
     "friend-active": _on_friend_active,
@@ -153,6 +166,40 @@ _EVENT_HANDLERS: dict[str, EventHandler] = {
     "friend-location": _on_friend_location,
     "friend-update": _on_friend_update,
     "user-location": _on_user_location,
+    "notification": functools.partial(_on_vrchat_notification_event, event_type="notification"),
+    "notification-v2": functools.partial(
+        _on_vrchat_notification_event, event_type="notification-v2"
+    ),
+    "notification-v2-delete": functools.partial(
+        _on_vrchat_notification_event, event_type="notification-v2-delete"
+    ),
+    "see-notification": functools.partial(
+        _on_vrchat_notification_event, event_type="see-notification"
+    ),
+    "hide-notification": functools.partial(
+        _on_vrchat_notification_event, event_type="hide-notification"
+    ),
+    "response-notification": functools.partial(
+        _on_vrchat_notification_event, event_type="response-notification"
+    ),
+    "friend-add": functools.partial(_on_vrchat_notification_event, event_type="friend-add"),
+    "economy-update": functools.partial(
+        _on_vrchat_notification_event, event_type="economy-update"
+    ),
+    "instance-queue-joined": functools.partial(
+        _on_vrchat_notification_event, event_type="instance-queue-joined"
+    ),
+    "instance-queue-ready": functools.partial(
+        _on_vrchat_notification_event, event_type="instance-queue-ready"
+    ),
+    "group-joined": functools.partial(_on_vrchat_notification_event, event_type="group-joined"),
+    "group-left": functools.partial(_on_vrchat_notification_event, event_type="group-left"),
+    "group-member-updated": functools.partial(
+        _on_vrchat_notification_event, event_type="group-member-updated"
+    ),
+    "group-role-updated": functools.partial(
+        _on_vrchat_notification_event, event_type="group-role-updated"
+    ),
 }
 
 

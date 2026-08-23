@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.friend import Friend
+from app.models.vrchat_notification import VRChatNotification
 from app.services.vrchat import pipeline
 from tests.fakes import FakeNotificationSender
 
@@ -229,6 +230,39 @@ async def test_seed_self_location_updates_session_from_current_user(
 
 async def _noop_seed_self_location(auth_cookie: str, user_agent: str) -> None:
     return None
+
+
+async def test_on_notification_event_ingests_via_notification_service(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        sender = FakeNotificationSender()
+        content = {"id": "not_pipeline_1", "type": "friendRequest", "senderUsername": "Zoe"}
+        handler = pipeline._EVENT_HANDLERS["notification"]
+        await handler(db, sender, content)
+
+        row = (
+            await db.execute(
+                select(VRChatNotification).where(
+                    VRChatNotification.vrchat_notification_id == "not_pipeline_1"
+                )
+            )
+        ).scalar_one()
+        assert row.notification_type == "friendRequest"
+        assert row.sender_display_name == "Zoe"
+
+
+async def test_on_economy_update_event_routes_to_notification_service(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        sender = FakeNotificationSender()
+        handler = pipeline._EVENT_HANDLERS["economy-update"]
+        await handler(db, sender, {"description": "残高が更新されました"})
+
+        row = (await db.execute(select(VRChatNotification))).scalars().one()
+        assert row.pipeline_event == "economy-update"
+        assert row.message == "残高が更新されました"
 
 
 async def _fake_sender_factory() -> FakeNotificationSender:

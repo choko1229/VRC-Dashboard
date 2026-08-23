@@ -101,6 +101,10 @@ powershell -File desktop_agent/build.ps1
 - `device_pairing.py`: ブラウザでログイン→承認、というペアリングフロー（コード取得・
   ブラウザを開く・ポーリング）。POSTがリダイレクトでGETに化けないようにする独自の
   リダイレクトハンドラも含む（http→https強制リダイレクトの環境向け）
+- `command_poller.py`: ダッシュボードの`/notifications`ページで「参加」を押した際の
+  PC側操作の委譲（`GET /api/agent/commands`を5秒間隔でポーリングし、`join_instance`
+  コマンドを受け取ったら`os.startfile("vrchat://launch?id=<location>")`でVRChatを起動して
+  インスタンスに参加する）。gamelog_watcherと同じペアリング済みトークンを使い回す
 - `branding.py`: Web UIと揃えた配色・アイコン生成（`tray_app.py`・`first_run_dialog.py`が使う）
 - `updater.py`: GitHub Releasesでのバージョン比較・ダウンロード・自己置換
 - `startup.py`: Windowsスタートアップ（`HKCU\...\Run`）への登録・解除
@@ -127,6 +131,12 @@ powershell -File desktop_agent/build.ps1
   全リクエストに明示的な`User-Agent: VRCDashboardAgent`を付与して回避している
   （v0.1.2で修正。この問題が再発する場合はダッシュボード側のWAF設定でこのUser-Agentを
   許可するか、ボット対策のセンシティビティを見直すこと）。
+
+- `command_poller.py`の`vrchat://launch?id=...`によるVRChat起動は、VRChatクライアント
+  （またはSteam経由のランチャー）がこのURIスキームをOSに登録済みであることに依存する
+  （通常はVRChat公式クライアントのインストール時に自動登録される）。実機PCでの起動確認は
+  本セッションでは未実施（サーバー側のコマンドキュー投入・エージェントのポーリング/ack
+  往復はテスト・実機ブラウザで確認済み）。
 
 ## TODO
 

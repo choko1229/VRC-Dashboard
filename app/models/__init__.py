@@ -1,5 +1,6 @@
 """全モデルをインポートし、Base.metadataに登録する（Alembicのautogenerate用）。"""
 
+from app.models.agent_command import AgentCommand
 from app.models.app_setting import AppSetting
 from app.models.avatar import Avatar
 from app.models.avatar_tag import AvatarTag
@@ -17,10 +18,12 @@ from app.models.game_log_instance import GameLogInstance
 from app.models.schedule_event import ScheduleEvent
 from app.models.sync_cursor import SyncCursor
 from app.models.tag import Tag
+from app.models.vrchat_notification import VRChatNotification
 from app.models.vrchat_session import VRChatSession
 from app.models.web_push_subscription import WebPushSubscription
 
 __all__ = [
+    "AgentCommand",
     "AppSetting",
     "Avatar",
     "AvatarTag",
@@ -38,6 +41,7 @@ __all__ = [
     "ScheduleEvent",
     "SyncCursor",
     "Tag",
+    "VRChatNotification",
     "VRChatSession",
     "WebPushSubscription",
 ]

@@ -1,0 +1,40 @@
+{% set next_sort_dir = "asc" if sort_dir == "desc" else "desc" %}
+<div class="notification-filter-bar">
+    <select class="notification-type-select"
+        hx-get="/notifications/content" hx-target="#notification-content" hx-swap="innerHTML"
+        hx-vals='js:{"notification_type": event.target.value, "q": {{ search|tojson }}, "sort_dir": {{ sort_dir|tojson }}}'>
+        <option value="" {% if not notification_type %}selected{% endif %}>フィルター（全て）</option>
+        {% for value, label in type_choices %}
+        <option value="{{ value }}" {% if notification_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <input type="search" placeholder="検索..." value="{{ search }}" class="notification-search-input"
+        hx-get="/notifications/content" hx-target="#notification-content" hx-swap="innerHTML"
+        hx-trigger="keyup changed delay:400ms, search"
+        hx-vals='js:{"notification_type": {{ notification_type|tojson }}, "q": event.target.value, "sort_dir": {{ sort_dir|tojson }}}'>
+</div>
+
+<div class="notification-table-wrap">
+    <table class="notification-table">
+        <thead>
+            <tr>
+                <th class="notification-th-date">
+                    <button type="button" class="notification-sort-btn"
+                        hx-get="/notifications/content" hx-target="#notification-content" hx-swap="innerHTML"
+                        hx-vals='{"notification_type": {{ notification_type|tojson }}, "q": {{ search|tojson }}, "sort_dir": {{ next_sort_dir|tojson }}}'>
+                        日付 <span class="notification-sort-arrow">{{ "↓" if sort_dir == "desc" else "↑" }}</span>
+                    </button>
+                </th>
+                <th>種類</th>
+                <th>ユーザー</th>
+                <th>グループ</th>
+                <th>画像</th>
+                <th>メッセージ</th>
+                <th class="notification-th-action">アクション</th>
+            </tr>
+        </thead>
+        <tbody id="notification-tbody">
+            {% include "notifications/_rows.html" %}
+        </tbody>
+    </table>
+</div>

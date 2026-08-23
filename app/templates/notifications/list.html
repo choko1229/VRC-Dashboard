@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}通知{% endblock %}
+{% block content %}
+<h1 class="app-heading">通知</h1>
+<p class="text-muted">
+    VRChatからの招待・フレンドリクエスト・グループイベント等の通知を時系列で表示します。
+</p>
+
+<div id="notification-content">
+    {% include "notifications/_content.html" %}
+</div>
+{% endblock %}

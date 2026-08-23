@@ -31,6 +31,7 @@ from app.routers import (
     schedule,
     settings,
     setup,
+    vrchat_notifications,
     webpush,
 )
 from app.services import app_config_service, notification_service, vrchat_session_service
@@ -132,6 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(webpush.router)
     app.include_router(game_log.router)
     app.include_router(feed.router)
+    app.include_router(vrchat_notifications.router)
 
     @app.get("/sw.js", include_in_schema=False)
     async def service_worker() -> FileResponse:

@@ -75,6 +75,23 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
   - **自動更新**: 起動時と6時間ごとにGitHub Releasesの最新版を確認し、自身より新しければ
     ダウンロードして自己置換・再起動する（サーバーには自動更新用のエンドポイントを持たない）。
   詳細は`desktop_agent/README.md`参照。
+- **通知**（`/notifications`）: VRChat自体の通知（招待/招待リクエスト/フレンドリクエスト/
+  メッセージ/Boop/投票キック等）とグループイベント・エコノミー通知等を時系列一覧表示する
+  VRCXの「Notification Log」タブに近い機能。フィルター（種類別プルダウン）・検索・
+  日付列クリックでのソート・無限スクロールに対応する。
+  - VRChat公式が仕様公開しているのはPipelineの`notification`イベント7種類
+    （invite/requestInvite/inviteResponse/requestInviteResponse/friendRequest/message/
+    boop/voteToKick）のみ。それ以外（`notification-v2`のグループイベント・
+    `economy-update`・`instance-queue-*`・`group-*`等）は非公式のため、フィールド抽出に
+    失敗した/未知の種類は生のtype文字列をそのまま表示するフォールバックを用意している
+    （`app/services/vrchat_notification_service.py`の`_TYPE_META`/`_PARSERS`参照）。
+  - **招待の承諾**: VRChatへの参加はサーバー単体では実行できない（実際にVRChatクライアントを
+    起動するのはユーザーのPC）ため、「参加」ボタンはVRChatを直接呼び出さず`agent_command`
+    テーブルにコマンドを積む。デスクトップエージェント（`desktop_agent/command_poller.py`、
+    ゲームログ取り込みと同じペアリング済みトークンを使い回す）が5秒間隔でポーリングし、
+    `os.startfile("vrchat://launch?id=<location>")`でVRChatを起動してインスタンスに
+    参加させる。フレンドリクエストの承諾/拒否やメッセージ・Boopの削除はVRChat REST API
+    だけで完結し、PC側の操作は不要。
 - **アバター準備状況**: 自分のアバター一覧の同期、タグ付け、メモ管理。
 - **今日の予定**: 手動登録またはVRChatグループカレンダーからの取り込みによるスケジュール管理
   （月間/週間カレンダー表示）。
@@ -154,7 +171,7 @@ app/
 ├── db/                 # DBセッション・Base
 ├── models/             # SQLAlchemyモデル（1テーブル1ファイル）
 ├── schemas/             # pydanticスキーマ
-├── routers/            # auth / dashboard / friends / feed / game_log / avatars / schedule / settings / setup / webpush
+├── routers/            # auth / dashboard / friends / feed / vrchat_notifications / game_log / avatars / schedule / settings / setup / webpush
 ├── services/           # VRChatクライアント・Pipeline・各種業務ロジック
 ├── notifications/       # Discord通知・Web Push通知の抽象化
 ├── templates/           # Jinja2テンプレート
