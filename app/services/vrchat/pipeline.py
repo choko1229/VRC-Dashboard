@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.notifications.base import NotificationPayload, NotificationSender
 from app.schemas.vrchat import VRChatUser, parse_world_id_from_location
 from app.services import friends_service, vrchat_session_service
+from app.services.vrchat.client import VRChatClient
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ EventHandler = Callable[[AsyncSession, NotificationSender, dict[str, Any]], Awai
 NotificationSenderFactory = Callable[[AsyncSession], Awaitable[NotificationSender]]
 AuthCookieProvider = Callable[[], Awaitable[str | None]]
 UserAgentProvider = Callable[[], Awaitable[str]]
+SelfLocationSeeder = Callable[[str, str], Awaitable[None]]
 
 
 async def _on_friend_online(
@@ -154,11 +156,13 @@ class PipelineManager:
         initial_reconnect_seconds: float,
         max_reconnect_seconds: float,
         notify_after_failures: int,
+        seed_self_location: SelfLocationSeeder | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._notification_sender_factory = notification_sender_factory
         self._get_auth_cookie = get_auth_cookie
         self._get_user_agent = get_user_agent
+        self._seed_self_location = seed_self_location or self._default_seed_self_location
         self._initial_reconnect_seconds = initial_reconnect_seconds
         self._max_reconnect_seconds = max_reconnect_seconds
         self._notify_after_failures = notify_after_failures
@@ -229,6 +233,8 @@ class PipelineManager:
             raise RuntimeError("VRChatの認証セッションがありません")
         user_agent = await self._get_user_agent()
 
+        await self._seed_self_location(auth_cookie, user_agent)
+
         url = f"{_PIPELINE_URL}?authToken={auth_cookie}"
         # VRChatはUser-Agent未設定/デフォルト値のリクエストを403で拒否するため、
         # websocketsライブラリの既定User-Agentではなく設定済みのVRChat用UAを明示する。
@@ -238,6 +244,31 @@ class PipelineManager:
             logger.info("VRChat Pipelineに接続しました")
             async for raw_message in ws:
                 await self._handle_message(raw_message)
+
+    async def _default_seed_self_location(self, auth_cookie: str, user_agent: str) -> None:
+        """接続確立時点で、自分（操作者）の現在地をREST APIから補完する。
+
+        Pipelineの"user-location"イベントは実際にワールドを移動した瞬間にしか
+        送られない。そのため接続時点で既にどこかのワールドに滞在している場合、
+        次にワールドを移動するまでself_locationがNoneのままとなり、サイドバー/
+        フレンド一覧の「同じインスタンス」区分が機能しない不具合があった。
+        """
+        client = VRChatClient(user_agent=user_agent, auth_cookie=auth_cookie)
+        try:
+            current_user = await client.get_current_user()
+            world_id = parse_world_id_from_location(current_user.location)
+            world_name = await client.get_world_name(world_id) if world_id else None
+            async with self._session_factory() as db:
+                await vrchat_session_service.update_self_location(
+                    db,
+                    location=current_user.location,
+                    world_id=world_id,
+                    world_name=world_name,
+                )
+        except Exception:
+            logger.warning("接続時点の自分の現在地取得に失敗しました", exc_info=True)
+        finally:
+            await client.close()
 
     async def _handle_message(self, raw_message: str | bytes) -> None:
         try:

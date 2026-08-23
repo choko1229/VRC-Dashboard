@@ -153,10 +153,72 @@ async def test_connect_and_listen_passes_configured_user_agent(
         initial_reconnect_seconds=1,
         max_reconnect_seconds=1,
         notify_after_failures=1,
+        seed_self_location=_noop_seed_self_location,
     )
     await manager._connect_and_listen()
 
     assert captured["kwargs"]["user_agent_header"] == "VRC-Dashboard-Test/1.0"
+
+
+async def test_seed_self_location_updates_session_from_current_user(
+    db_session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """接続時点で既にワールドに滞在している場合でも、REST APIから
+    self_locationが補完され「同じインスタンス」判定が機能することを確認する。
+    """
+    from app.models.vrchat_session import VRChatSession
+    from app.schemas.vrchat import VRChatUser
+    from app.services.vrchat import client as vrchat_client_module
+
+    async def fake_get_current_user(self: Any) -> VRChatUser:
+        return VRChatUser(id="usr_self", display_name="Self", location="wrld_abc:123")
+
+    async def fake_get_world_name(self: Any, world_id: str) -> str | None:
+        return "Abc World"
+
+    async def fake_close(self: Any) -> None:
+        return None
+
+    monkeypatch.setattr(
+        vrchat_client_module.VRChatClient, "get_current_user", fake_get_current_user
+    )
+    monkeypatch.setattr(vrchat_client_module.VRChatClient, "get_world_name", fake_get_world_name)
+    monkeypatch.setattr(vrchat_client_module.VRChatClient, "close", fake_close)
+
+    async with db_session_factory() as db:
+        db.add(
+            VRChatSession(
+                vrchat_user_id="usr_self",
+                vrchat_display_name="Self",
+                auth_cookie_encrypted="dummy",
+                is_valid=True,
+            )
+        )
+        await db.commit()
+
+    manager = pipeline.PipelineManager(
+        session_factory=db_session_factory,
+        notification_sender_factory=lambda db: _fake_sender_factory(),
+        get_auth_cookie=_none_cookie,
+        get_user_agent=_fake_user_agent,
+        initial_reconnect_seconds=1,
+        max_reconnect_seconds=1,
+        notify_after_failures=1,
+    )
+    await manager._default_seed_self_location("dummy-auth-cookie", "VRC-Dashboard-Test/1.0")
+
+    async with db_session_factory() as db:
+        session = (
+            await db.execute(select(VRChatSession).where(VRChatSession.is_valid.is_(True)))
+        ).scalar_one()
+        assert session.self_location == "wrld_abc:123"
+        assert session.self_world_id == "wrld_abc"
+        assert session.self_world_name == "Abc World"
+
+
+async def _noop_seed_self_location(auth_cookie: str, user_agent: str) -> None:
+    return None
 
 
 async def _fake_sender_factory() -> FakeNotificationSender:

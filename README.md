@@ -35,7 +35,10 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
       当該データを取得する手段が無い（またはプライバシー上非公開）ため非対応。
 - **フィード**（`/feed`）: 全フレンド横断の活動履歴を時系列一覧表示するVRCXの「フィード」
   タブに近い機能。「現在地／オンライン／オフライン／ステータス／アバター」の種別タブ、
-  お気に入りのみ表示、フレンド名検索、「もっと見る」による追加読み込みに対応する。
+  お気に入りのみ表示、フレンド名検索に対応する。各行は日付・種別・ユーザー・詳細を
+  1行に収めるコンパクト表示（省略はellipsisで、はみ出しはツールチップではなく詰め）。
+  下端までスクロールすると`hx-trigger="revealed"`により次の50件を自動読み込みする
+  （ボタン操作不要の無限スクロール）。
   ステータス変化は変化前後を色付きドットの遷移で表示し、アバター変更は`friend-update`
   イベントでの`currentAvatarThumbnailImageUrl`の差分検知により記録する
   （`friend_presence_event.event_type`に`status_change`/`avatar_change`を追加）。
@@ -163,6 +166,13 @@ tests/                  # unit / integration
   実動作確認により、`GET /instances/{location}`のlocationは`:`・`~`・`()`を percent-encode
   すると400 Bad Requestになる（生のまま渡す必要がある）ことが判明し修正済み
   （`app/services/vrchat/client.py`の`_encode_instance_location`参照）。
+  - `user-location`イベントは実際にワールドを移動した瞬間にしか送られないため、Pipeline接続
+    時点で既にどこかのワールドに滞在している場合は次に移動するまで`self_location`が`None`の
+    ままとなり「同じインスタンス」区分が機能しない不具合があった。接続確立時に
+    `GET /auth/user`から現在地を取得して`self_location`を補完することで解消した
+    （`app/services/vrchat/pipeline.py`の`_default_seed_self_location`参照。テストでは
+    実ネットワーク呼び出しを避けるため`PipelineManager`の`seed_self_location`引数で
+    差し替え可能にしている）。
 - VRChatはPipeline(WebSocket)接続時にデフォルトのUser-Agent（`websockets`ライブラリの既定値等）
   を`403 Forbidden`で拒否するため、REST APIと同じ設定済みVRChat用User-Agent
   （`/settings/general`で変更可能）をWebSocketハンドシェイクにも明示的に付与している。

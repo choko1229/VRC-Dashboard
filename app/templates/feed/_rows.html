@@ -13,15 +13,18 @@
             {%- endif %}
         </span>
     </td>
-    <td class="feed-cell-user">
-        {% if friend.current_avatar_thumbnail_url %}
-        <img src="{{ friend.current_avatar_thumbnail_url }}" class="feed-user-thumb" alt="">
-        {% else %}
-        <span class="feed-user-thumb feed-user-thumb-placeholder"></span>
-        {% endif %}
-        {{ friend.display_name }}
+    <td>
+        <span class="feed-cell-user">
+            {% if friend.current_avatar_thumbnail_url %}
+            <img src="{{ friend.current_avatar_thumbnail_url }}" class="feed-user-thumb" alt="">
+            {% else %}
+            <span class="feed-user-thumb feed-user-thumb-placeholder"></span>
+            {% endif %}
+            {{ friend.display_name }}
+        </span>
     </td>
-    <td class="feed-cell-detail">
+    <td>
+        <span class="feed-cell-detail">
         {% if event.event_type in ("location_change", "online") %}
             {% if event.world_name %}
             <span class="feed-detail-flag">{{ instance_region_flag(event.location) }}</span>
@@ -41,16 +44,18 @@
             {% endif %}
             <span class="text-muted">アバターを変更しました</span>
         {% endif %}
+        </span>
     </td>
 </tr>
 {% endfor %}
 {% if has_more %}
-<tr class="feed-load-more-row">
+<tr class="feed-load-more-row"
+    hx-get="/feed/rows"
+    hx-trigger="revealed"
+    hx-vals='{"event_type": {{ event_type|tojson }}, "favorites_only": {{ favorites_only|tojson }}, "q": {{ search|tojson }}, "page": {{ next_page }}}'
+    hx-target="this" hx-swap="outerHTML">
     <td colspan="4">
-        <button type="button" class="btn btn-ghost"
-            hx-get="/feed/rows"
-            hx-vals='{"event_type": {{ event_type|tojson }}, "favorites_only": {{ favorites_only|tojson }}, "q": {{ search|tojson }}, "page": {{ next_page }}}'
-            hx-target="closest tr" hx-swap="outerHTML">もっと見る</button>
+        <span class="feed-load-more-spinner">読み込み中...</span>
     </td>
 </tr>
 {% elif not entries %}
