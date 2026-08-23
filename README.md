@@ -90,6 +90,21 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
   - **自動更新**: 起動時と6時間ごとにGitHub Releasesの最新版を確認し、自身より新しければ
     ダウンロードして自己置換・再起動する（サーバーには自動更新用のエンドポイントを持たない）。
   詳細は`desktop_agent/README.md`参照。
+- **プレイ記録**（`/stats`）: 自分自身のプレイ傾向を「いつ／どのぐらい／どんなワールドで／
+  だれと」の観点でグラフ表示する。データソースはゲームログ（`game_log_instance`/
+  `game_log_event`）のみのため、ゲームログ機能同様デスクトップエージェントが稼働していた
+  期間しか集計できない。
+  - **いつ**: 訪問開始時刻（JST）を曜日×時間帯のヒートマップで表示
+    （`friends_service.compute_activity_stats`と同じCSSグリッド方式のヒートマップ、
+    `app/services/play_stats_service.py`の`get_weekday_hour_heatmap`）。
+  - **どのぐらい**: 直近30日の1日ごとの合計プレイ時間をCSSバーチャートで表示
+    （`get_daily_play_minutes`。日をまたぐ滞在は開始日にまとめて計上する簡易な近似）。
+  - **どんなワールドで**: 滞在時間の多いワールド順のランキング（`get_top_worlds`）。
+  - **だれと**: 一緒に居た時間の多いフレンド順のランキング。フレンド一覧テーブルの
+    「一緒に居た時間」と同じ`game_log_service.get_friend_co_presence_stats`を再利用する
+    （`get_all_friends_together`）。
+  - グラフは全てプレーンCSS（`<div>`の高さ/幅%指定）で実装しており、Chart.js等の
+    JSライブラリは使っていない。
 - **通知**（`/notifications`）: VRChat自体の通知（招待/招待リクエスト/フレンドリクエスト/
   メッセージ/Boop/投票キック等）とグループイベント・エコノミー通知等を時系列一覧表示する
   VRCXの「Notification Log」タブに近い機能。フィルター（種類別プルダウン）・検索・
@@ -186,7 +201,7 @@ app/
 ├── db/                 # DBセッション・Base
 ├── models/             # SQLAlchemyモデル（1テーブル1ファイル）
 ├── schemas/             # pydanticスキーマ
-├── routers/            # auth / dashboard / friends / feed / vrchat_notifications / game_log / avatars / schedule / settings / setup / webpush
+├── routers/            # auth / dashboard / friends / feed / vrchat_notifications / game_log / play_stats / avatars / schedule / settings / setup / webpush
 ├── services/           # VRChatクライアント・Pipeline・各種業務ロジック
 ├── notifications/       # Discord通知・Web Push通知の抽象化
 ├── templates/           # Jinja2テンプレート

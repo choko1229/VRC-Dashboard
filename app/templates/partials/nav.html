@@ -1,4 +1,4 @@
-{% from "partials/icons.html" import icon_home, icon_users, icon_avatar, icon_calendar, icon_settings, icon_logout, icon_sun, icon_moon, icon_admin, icon_play, icon_activity, icon_bell %}
+{% from "partials/icons.html" import icon_home, icon_users, icon_avatar, icon_calendar, icon_settings, icon_logout, icon_sun, icon_moon, icon_admin, icon_play, icon_activity, icon_bell, icon_chart_bar %}
 {% if request.cookies.get("vrc_dashboard_session") %}
 {% set current_user = current_dashboard_user(request) %}
 <nav class="app-nav">
@@ -11,6 +11,7 @@
         <a href="/avatars" title="アバター" class="nav-link">{{ icon_avatar() }}<span>アバター</span></a>
         <a href="/schedule" title="予定" class="nav-link">{{ icon_calendar() }}<span>予定</span></a>
         <a href="/game-log" title="ゲームログ" class="nav-link">{{ icon_play() }}<span>ログ</span></a>
+        <a href="/stats" title="プレイ記録" class="nav-link">{{ icon_chart_bar() }}<span>プレイ記録</span></a>
         <a href="/settings/vrchat" title="設定" class="nav-link">{{ icon_settings() }}<span>設定</span></a>
         {% if current_user and current_user.is_admin %}
         <a href="/settings/allowlist" title="ユーザー管理" class="nav-link">{{ icon_admin() }}<span>管理</span></a>

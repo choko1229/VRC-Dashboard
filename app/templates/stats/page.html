@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}プレイ記録{% endblock %}
+{% block content %}
+<h1 class="app-heading">プレイ記録</h1>
+<p class="text-muted">
+    デスクトップエージェントが観測できた範囲のゲームログから、自分自身のプレイ傾向を集計します。
+    エージェントが稼働していなかった期間は含まれません。
+</p>
+
+{% if page.summary.total_visits == 0 %}
+<p class="placeholder">
+    記録がまだありません。「VRCダッシュボード連携ツール」（デスクトップエージェント）を
+    VRChat起動中のPCで動かすと、ここに集計が表示されます。詳しくは
+    <a href="/game-log">ゲームログ</a>のページを参照してください。
+</p>
+{% else %}
+
+<div class="stats-summary-grid">
+    <div class="stats-summary-card">
+        <span class="stats-summary-value">{{ format_duration_seconds(page.summary.total_minutes * 60) }}</span>
+        <span class="stats-summary-label">総プレイ時間</span>
+    </div>
+    <div class="stats-summary-card">
+        <span class="stats-summary-value">{{ page.summary.total_visits }}</span>
+        <span class="stats-summary-label">訪問回数</span>
+    </div>
+    <div class="stats-summary-card">
+        <span class="stats-summary-value">{{ page.summary.distinct_world_count }}</span>
+        <span class="stats-summary-label">訪問ワールド数</span>
+    </div>
+    <div class="stats-summary-card">
+        <span class="stats-summary-value">{{ page.summary.distinct_friend_count }}</span>
+        <span class="stats-summary-label">一緒に遊んだフレンド数</span>
+    </div>
+</div>
+
+<h2 class="stats-section-heading">いつ（曜日×時間帯）</h2>
+{% if page.heatmap.total_visits == 0 %}
+<p class="placeholder">記録がありません。</p>
+{% else %}
+<p class="text-muted">
+    最も活発な曜日: <strong>{{ page.heatmap.most_active_weekday }}</strong>
+    ／ ピーク時間帯: <strong>{{ page.heatmap.peak_hour_range }}</strong>
+    （訪問開始 {{ page.heatmap.total_visits }}回・JST基準）
+</p>
+<div class="activity-heatmap">
+    <div class="activity-heatmap-hours">
+        <span></span>
+        {% for h in range(24) %}<span class="activity-heatmap-hour-label">{% if h % 3 == 0 %}{{ "%02d"|format(h) }}{% endif %}</span>{% endfor %}
+    </div>
+    {% for weekday_label in ["月", "火", "水", "木", "金", "土", "日"] %}
+    <div class="activity-heatmap-row">
+        <span class="activity-heatmap-weekday">{{ weekday_label }}</span>
+        {% for count in page.heatmap.grid[loop.index0] %}
+        <span class="activity-heatmap-cell" style="--intensity: {{ (count / page.heatmap.max_count) if page.heatmap.max_count else 0 }};" title="{{ count }}回"></span>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<h2 class="stats-section-heading">どのぐらい（直近30日）</h2>
+{% set max_minutes = (page.daily|map(attribute="minutes")|list)|max %}
+<div class="stats-daily-chart">
+    {% for entry in page.daily %}
+    <div class="stats-daily-bar-wrap" title="{{ entry.day.strftime('%m/%d') }}: {{ format_duration_seconds(entry.minutes * 60) }}">
+        <span class="stats-daily-bar" style="height: {{ (entry.minutes / max_minutes * 100) if max_minutes else 0 }}%;"></span>
+        {% if loop.index0 % 5 == 0 %}<span class="stats-daily-bar-label">{{ entry.day.strftime("%m/%d") }}</span>{% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+<h2 class="stats-section-heading">どんなワールドで</h2>
+{% if page.top_worlds %}
+<ul class="stats-rank-list">
+    {% for world in page.top_worlds %}
+    <li class="stats-rank-row">
+        <span class="stats-rank-name">{{ world.world_name }}</span>
+        <span class="stats-rank-bar-wrap">
+            <span class="stats-rank-bar" style="width: {{ (world.total_minutes / page.top_worlds[0].total_minutes * 100) if page.top_worlds[0].total_minutes else 0 }}%;"></span>
+        </span>
+        <span class="stats-rank-value">{{ format_duration_seconds(world.total_minutes * 60) }}（{{ world.visit_count }}回）</span>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="placeholder">記録がありません。</p>
+{% endif %}
+
+<h2 class="stats-section-heading">だれと</h2>
+{% if page.top_friends %}
+<ul class="stats-rank-list">
+    {% for entry in page.top_friends %}
+    <li class="stats-rank-row">
+        {% if entry.friend.current_avatar_thumbnail_url %}
+        <img src="{{ entry.friend.current_avatar_thumbnail_url }}" class="stats-rank-avatar" alt="">
+        {% else %}
+        <span class="stats-rank-avatar stats-rank-avatar-placeholder"></span>
+        {% endif %}
+        <span class="stats-rank-name">{{ entry.friend.display_name }}</span>
+        <span class="stats-rank-bar-wrap">
+            <span class="stats-rank-bar" style="width: {{ (entry.together_minutes / page.top_friends[0].together_minutes * 100) if page.top_friends[0].together_minutes else 0 }}%;"></span>
+        </span>
+        <span class="stats-rank-value">{{ format_duration_seconds(entry.together_minutes * 60) }}（{{ entry.join_count }}回）</span>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="placeholder">記録がありません。</p>
+{% endif %}
+
+{% endif %}
+{% endblock %}

@@ -1604,3 +1604,131 @@ body {
 .friend-table-cell-links a:last-child {
     margin-right: 0;
 }
+
+/* プレイ記録ページ */
+.stats-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--space-3);
+    margin: var(--space-5) 0;
+}
+
+.stats-summary-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+}
+
+.stats-summary-value {
+    font-size: var(--text-xl);
+    font-weight: 700;
+}
+
+.stats-summary-label {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+}
+
+.stats-section-heading {
+    font-size: var(--text-lg);
+    margin: var(--space-6) 0 var(--space-3);
+}
+
+.stats-daily-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 140px;
+    padding-bottom: var(--space-5);
+    overflow-x: auto;
+}
+
+.stats-daily-bar-wrap {
+    position: relative;
+    flex: 1 0 8px;
+    min-width: 8px;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+}
+
+.stats-daily-bar {
+    display: block;
+    width: 100%;
+    min-height: 2px;
+    border-radius: 2px 2px 0 0;
+    background-color: var(--color-friends-primary);
+}
+
+.stats-daily-bar-label {
+    position: absolute;
+    bottom: -20px;
+    left: 0;
+    font-size: 10px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.stats-rank-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.stats-rank-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.stats-rank-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-pill);
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.stats-rank-avatar-placeholder {
+    background-color: var(--color-friends-bg-soft);
+    border: 1px solid var(--color-friends-border);
+}
+
+.stats-rank-name {
+    flex: 0 0 160px;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stats-rank-bar-wrap {
+    flex: 1;
+    min-width: 60px;
+    height: 10px;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-friends-bg-soft);
+    overflow: hidden;
+}
+
+.stats-rank-bar {
+    display: block;
+    height: 100%;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-friends-primary);
+}
+
+.stats-rank-value {
+    flex: 0 0 auto;
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}

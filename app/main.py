@@ -28,6 +28,7 @@ from app.routers import (
     feed,
     friends,
     game_log,
+    play_stats,
     schedule,
     settings,
     setup,
@@ -134,6 +135,7 @@ def create_app() -> FastAPI:
     app.include_router(game_log.router)
     app.include_router(feed.router)
     app.include_router(vrchat_notifications.router)
+    app.include_router(play_stats.router)
 
     @app.get("/sw.js", include_in_schema=False)
     async def service_worker() -> FileResponse:
