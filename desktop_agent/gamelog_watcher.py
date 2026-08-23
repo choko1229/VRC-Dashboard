@@ -31,6 +31,12 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import truststore
+
+# OSの証明書ストアでTLS検証する（main.pyのコメント参照）。単独スクリプトとして動かす
+# 場合もあるため、ここでも同様に呼んでおく（複数回呼んでも問題ない）。
+truststore.inject_into_ssl()
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from desktop_agent.gamelog_parser import (  # noqa: E402

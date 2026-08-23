@@ -1,4 +1,4 @@
-"""ゲームログ機能の統合テスト（取り込みAPIの認証、ページ表示、APIキー発行）。"""
+"""ゲームログ機能の統合テスト（取り込みAPIの認証、ページ表示、エージェントトークン管理）。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.deps import get_current_user
 from app.models.dashboard_user import DashboardUser
 from app.models.game_log_instance import GameLogInstance
-from app.services import app_config_service
+from app.services import game_log_agent_token_service
 
 
 def _override_current_user(fastapi_app: FastAPI, *, is_admin: bool) -> None:
@@ -34,25 +34,25 @@ async def test_ingest_rejects_missing_authorization_header(client: AsyncClient) 
     assert response.status_code == 401
 
 
-async def test_ingest_rejects_wrong_api_key(
+async def test_ingest_rejects_wrong_token(
     client: AsyncClient, db_session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
     async with db_session_factory() as db:
-        await app_config_service.generate_game_log_api_key(db)
+        await game_log_agent_token_service.create_token(db, label="test")
 
     response = await client.post(
         "/api/game-log/events",
         json={"events": []},
-        headers={"Authorization": "Bearer wrong-key"},
+        headers={"Authorization": "Bearer wrong-token"},
     )
     assert response.status_code == 401
 
 
-async def test_ingest_accepts_events_with_valid_api_key(
+async def test_ingest_accepts_events_with_valid_token(
     client: AsyncClient, db_session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
     async with db_session_factory() as db:
-        raw_key = await app_config_service.generate_game_log_api_key(db)
+        raw_token = await game_log_agent_token_service.create_token(db, label="自宅PC")
 
     response = await client.post(
         "/api/game-log/events",
@@ -67,7 +67,7 @@ async def test_ingest_accepts_events_with_valid_api_key(
                 }
             ]
         },
-        headers={"Authorization": f"Bearer {raw_key}"},
+        headers={"Authorization": f"Bearer {raw_token}"},
     )
     assert response.status_code == 200
     assert response.json() == {"accepted": 1}
@@ -76,6 +76,22 @@ async def test_ingest_accepts_events_with_valid_api_key(
         instances = (await db.execute(select(GameLogInstance))).scalars().all()
         assert len(instances) == 1
         assert instances[0].world_name == "World A"
+
+
+async def test_a_second_token_does_not_invalidate_the_first(
+    client: AsyncClient, db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """複数デバイスをペアリングしても、既存デバイスのトークンが無効化されないこと。"""
+    async with db_session_factory() as db:
+        first_token = await game_log_agent_token_service.create_token(db, label="PC1")
+        await game_log_agent_token_service.create_token(db, label="PC2")
+
+    response = await client.post(
+        "/api/game-log/events",
+        json={"events": []},
+        headers={"Authorization": f"Bearer {first_token}"},
+    )
+    assert response.status_code == 200
 
 
 async def test_game_log_page_renders_for_logged_in_user(
@@ -91,22 +107,31 @@ async def test_game_log_page_renders_for_logged_in_user(
     assert "エージェント連携の設定" not in response.text
 
 
-async def test_game_log_api_key_generation_forbidden_for_non_admin(
-    fastapi_app: FastAPI, client: AsyncClient
+async def test_revoke_agent_token_forbidden_for_non_admin(
+    fastapi_app: FastAPI, client: AsyncClient, db_session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
+    async with db_session_factory() as db:
+        await game_log_agent_token_service.create_token(db, label="test")
+        tokens = await game_log_agent_token_service.list_tokens(db)
+
     _override_current_user(fastapi_app, is_admin=False)
 
-    response = await client.post("/game-log/api-key")
+    response = await client.delete(f"/game-log/agent-token/{tokens[0].id}")
 
     assert response.status_code == 403
 
 
-async def test_game_log_api_key_generation_allowed_for_admin(
-    fastapi_app: FastAPI, client: AsyncClient
+async def test_revoke_agent_token_allowed_for_admin(
+    fastapi_app: FastAPI, client: AsyncClient, db_session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
+    async with db_session_factory() as db:
+        raw_token = await game_log_agent_token_service.create_token(db, label="test")
+        tokens = await game_log_agent_token_service.list_tokens(db)
+
     _override_current_user(fastapi_app, is_admin=True)
 
-    response = await client.post("/game-log/api-key")
+    response = await client.delete(f"/game-log/agent-token/{tokens[0].id}")
 
     assert response.status_code == 200
-    assert "この画面を離れると二度と表示されません" in response.text
+    async with db_session_factory() as db:
+        assert await game_log_agent_token_service.verify_token(db, raw_token) is False

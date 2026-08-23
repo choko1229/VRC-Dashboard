@@ -1,4 +1,4 @@
-"""自動更新: バージョン確認・ダウンロード・自己置換。標準ライブラリのみに依存する。"""
+"""自動更新: GitHub Releasesでのバージョン確認・ダウンロード・自己置換（標準ライブラリのみ）。"""
 
 from __future__ import annotations
 
@@ -9,9 +9,14 @@ import shutil
 import subprocess
 import urllib.error
 import urllib.request
+from collections.abc import Mapping
 from pathlib import Path
 
 logger = logging.getLogger("gamelog_watcher.updater")
+
+# 配布はGitHub Releasesで行う（desktop_agent/build.ps1でこのリポジトリへリリースを作成する）。
+GITHUB_REPO = "choko1229/VRC-Dashboard"
+RELEASE_TAG_PREFIX = "desktop-agent-v"
 
 
 def parse_version(version: str) -> tuple[int, ...]:
@@ -27,21 +32,44 @@ def is_newer(remote_version: str, local_version: str) -> bool:
     return parse_version(remote_version) > parse_version(local_version)
 
 
-def fetch_latest_version(server_url: str, api_key: str) -> dict[str, object] | None:
-    url = server_url.rstrip("/") + "/api/game-log/agent/version"
-    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {api_key}"})
+def fetch_latest_release(repo: str = GITHUB_REPO) -> dict[str, object] | None:
+    """GitHub Releasesの最新リリース情報を取得する（公開リポジトリのため認証不要）。"""
+    url = f"https://api.github.com/repos/{repo}/releases/latest"
+    request = urllib.request.Request(
+        url,
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "VRCDashboardAgent"},
+    )
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             payload: dict[str, object] = json.loads(response.read().decode("utf-8"))
             return payload
     except (urllib.error.URLError, ValueError) as exc:
-        logger.warning("バージョン確認に失敗しました: %s", exc)
+        logger.warning("GitHub Releasesの確認に失敗しました: %s", exc)
         return None
 
 
-def download_update(server_url: str, api_key: str, dest_path: Path) -> bool:
-    url = server_url.rstrip("/") + "/api/game-log/agent/download"
-    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {api_key}"})
+def extract_version_and_asset_url(release: Mapping[str, object]) -> tuple[str, str] | None:
+    """リリース情報から(バージョン, exeアセットのダウンロードURL)を取り出す。該当が無ければNone。"""
+    tag_name = str(release.get("tag_name") or "")
+    if not tag_name.startswith(RELEASE_TAG_PREFIX):
+        return None
+    version = tag_name.removeprefix(RELEASE_TAG_PREFIX)
+
+    assets = release.get("assets")
+    if not isinstance(assets, list):
+        return None
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        name = asset.get("name")
+        download_url = asset.get("browser_download_url")
+        if isinstance(name, str) and name.endswith(".exe") and isinstance(download_url, str):
+            return version, download_url
+    return None
+
+
+def download_asset(download_url: str, dest_path: Path) -> bool:
+    request = urllib.request.Request(download_url, headers={"User-Agent": "VRCDashboardAgent"})
     try:
         with urllib.request.urlopen(request, timeout=120) as response:
             with dest_path.open("wb") as fp:

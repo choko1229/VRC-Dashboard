@@ -9,7 +9,7 @@ from app.core.config import Settings, get_settings
 from app.core.security import SecretCipher, get_secret_cipher
 from app.db.session import get_db
 from app.models.dashboard_user import DashboardUser
-from app.services import app_config_service
+from app.services import game_log_agent_token_service
 from app.services.session_service import get_user_for_session_token
 
 
@@ -64,36 +64,13 @@ async def require_game_log_api_key(
     authorization: str | None = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """ローカルエージェントからのゲームログ取り込みを`Authorization: Bearer <key>`で認証する。"""
+    """デスクトップエージェントからのゲームログ取り込みを`Authorization: Bearer <token>`で認証する。
+
+    トークンはブラウザでのペアリング（device_auth_service）またはgame_log_agent_token_service
+    で発行された、複数デバイスに対応するトークンのいずれか。
+    """
     if not authorization or not authorization.startswith("Bearer "):
         raise InvalidGameLogApiKeyError
-    raw_key = authorization.removeprefix("Bearer ").strip()
-    if not raw_key or not await app_config_service.verify_game_log_api_key(db, raw_key):
+    raw_token = authorization.removeprefix("Bearer ").strip()
+    if not raw_token or not await game_log_agent_token_service.verify_token(db, raw_token):
         raise InvalidGameLogApiKeyError
-
-
-async def require_admin_or_release_token(
-    request: Request,
-    authorization: str | None = Header(default=None),
-    db: AsyncSession = Depends(get_db),
-    settings: Settings = Depends(get_settings),
-) -> None:
-    """新しいエージェントビルドのアップロードを認証する。
-
-    ビルドスクリプトからの自動アップロード（`Authorization: Bearer <リリーストークン>`）と、
-    管理画面からの手動アップロード（ログインセッションCookie、管理者のみ）の両方を許可する。
-    """
-    if authorization and authorization.startswith("Bearer "):
-        raw_token = authorization.removeprefix("Bearer ").strip()
-        if raw_token and await app_config_service.verify_release_upload_token(db, raw_token):
-            return
-        raise InvalidGameLogApiKeyError
-
-    raw_session_token = request.cookies.get(settings.session_cookie_name)
-    if raw_session_token is None:
-        raise NotAuthenticatedError
-    user = await get_user_for_session_token(db, raw_session_token)
-    if user is None:
-        raise NotAuthenticatedError
-    if not user.is_admin:
-        raise NotAdminError

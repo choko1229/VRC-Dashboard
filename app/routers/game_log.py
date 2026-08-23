@@ -1,46 +1,37 @@
-"""インスタンスごとのゲームログ（ローカルエージェント連携）。"""
+"""インスタンスごとのゲームログ（デスクトップエージェント連携）。"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import (
-    get_current_admin_user,
-    get_current_user,
-    require_admin_or_release_token,
-    require_game_log_api_key,
-)
+from app.core.deps import get_current_admin_user, get_current_user, require_game_log_api_key
 from app.core.templating import templates
 from app.db.session import get_db
-from app.schemas.game_log import AgentVersionResponse, GameLogIngestRequest
-from app.services import agent_release_service, app_config_service, game_log_service
+from app.schemas.game_log import (
+    DeviceCodeResponse,
+    DevicePollRequest,
+    DevicePollResponse,
+    GameLogIngestRequest,
+)
+from app.services import device_auth_service, game_log_agent_token_service, game_log_service
 
 router = APIRouter()
 
 _AGENT_SCRIPT_PATH = (
     Path(__file__).resolve().parent.parent.parent / "desktop_agent" / "gamelog_watcher.py"
 )
+# 配布はGitHub Releasesで行う（desktop_agent/build.ps1参照）。サーバーはバイナリを保持しない。
+_GITHUB_RELEASES_URL = "https://github.com/choko1229/VRC-Dashboard/releases"
 
 
-async def _setup_panel_context(
-    db: AsyncSession,
-    *,
-    new_api_key: str | None = None,
-    new_release_token: str | None = None,
-) -> dict[str, object]:
+async def _setup_panel_context(db: AsyncSession) -> dict[str, object]:
     return {
-        "is_configured": await app_config_service.is_game_log_api_key_configured(db),
-        "new_api_key": new_api_key,
-        "agent_version": await agent_release_service.get_latest_version(db),
-        "agent_download_available": agent_release_service.has_release(),
-        "release_token_configured": await app_config_service.is_release_upload_token_configured(
-            db
-        ),
-        "new_release_token": new_release_token,
+        "agent_tokens": await game_log_agent_token_service.list_tokens(db),
+        "github_releases_url": _GITHUB_RELEASES_URL,
     }
 
 
@@ -97,132 +88,105 @@ async def game_log_instance_events(
     "/game-log/agent-script", dependencies=[Depends(get_current_user)], include_in_schema=False
 )
 async def download_agent_script() -> FileResponse:
+    """Pythonをそのまま動かしたい場合のフォールバック配布（通常はGitHub Releasesのexeを使う）。"""
     return FileResponse(
         _AGENT_SCRIPT_PATH, media_type="text/x-python", filename="gamelog_watcher.py"
     )
 
 
+@router.delete(
+    "/game-log/agent-token/{token_id}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(get_current_admin_user)],
+)
+async def revoke_agent_token(
+    request: Request, token_id: int, db: AsyncSession = Depends(get_db)
+) -> HTMLResponse:
+    await game_log_agent_token_service.revoke_token(db, token_id)
+    return templates.TemplateResponse(
+        request, "game_log/_setup_panel.html", await _setup_panel_context(db)
+    )
+
+
 @router.get(
-    "/game-log/agent/download",
+    "/game-log/device",
+    response_class=HTMLResponse,
     dependencies=[Depends(get_current_user)],
-    include_in_schema=False,
 )
-async def download_agent_exe_for_browser() -> FileResponse:
-    """管理画面からの手動ダウンロード用（セッションCookie認証）。"""
-    if not agent_release_service.has_release():
-        raise HTTPException(status_code=404, detail="配布中のビルドがありません。")
-    return FileResponse(
-        agent_release_service.release_exe_path(),
-        media_type="application/octet-stream",
-        filename="VRCDashboardAgent.exe",
-    )
-
-
-@router.get(
-    "/api/game-log/agent/version",
-    dependencies=[Depends(require_game_log_api_key)],
-    response_model=AgentVersionResponse,
-)
-async def agent_version(db: AsyncSession = Depends(get_db)) -> AgentVersionResponse:
-    """デスクトップエージェント自身の自己更新チェック用（APIキー認証）。"""
-    version = await agent_release_service.get_latest_version(db)
-    return AgentVersionResponse(
-        version=version or "0.0.0",
-        download_available=agent_release_service.has_release(),
-    )
-
-
-@router.get(
-    "/api/game-log/agent/download",
-    dependencies=[Depends(require_game_log_api_key)],
-)
-async def download_agent_exe_for_agent() -> FileResponse:
-    """デスクトップエージェント自身の自己更新ダウンロード用（APIキー認証）。"""
-    if not agent_release_service.has_release():
-        raise HTTPException(status_code=404, detail="配布中のビルドがありません。")
-    return FileResponse(
-        agent_release_service.release_exe_path(),
-        media_type="application/octet-stream",
-        filename="VRCDashboardAgent.exe",
+async def device_verification_page(request: Request, code: str = "") -> HTMLResponse:
+    """デスクトップエージェントが開くペアリング承認画面。管理者としてログインしている必要がある。"""
+    return templates.TemplateResponse(
+        request, "game_log/device.html", {"prefilled_code": code, "result": None}
     )
 
 
 @router.post(
-    "/game-log/agent/release",
+    "/game-log/device/approve",
     response_class=HTMLResponse,
-    dependencies=[Depends(require_admin_or_release_token)],
+    dependencies=[Depends(get_current_admin_user)],
 )
-async def upload_agent_release(
+async def approve_device(
     request: Request,
-    version: str = Form(...),
-    file: UploadFile = File(...),
+    user_code: str = Form(...),
+    label: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
-    content = await file.read()
-    await agent_release_service.save_release(db, version=version.strip(), content=content)
+    approved = await device_auth_service.approve(db, user_code, label=label.strip() or None)
     return templates.TemplateResponse(
-        request, "game_log/_setup_panel.html", await _setup_panel_context(db)
+        request,
+        "game_log/_device_result.html",
+        {"result": "approved" if approved else "not_found"},
     )
 
 
 @router.post(
-    "/game-log/release-token",
+    "/game-log/device/deny",
     response_class=HTMLResponse,
     dependencies=[Depends(get_current_admin_user)],
 )
-async def generate_release_upload_token(
-    request: Request, db: AsyncSession = Depends(get_db)
-) -> HTMLResponse:
-    raw_token = await app_config_service.generate_release_upload_token(db)
+async def deny_device(request: Request, user_code: str = Form(...)) -> HTMLResponse:
+    denied = device_auth_service.deny(user_code)
     return templates.TemplateResponse(
         request,
-        "game_log/_setup_panel.html",
-        await _setup_panel_context(db, new_release_token=raw_token),
-    )
-
-
-@router.delete(
-    "/game-log/release-token",
-    response_class=HTMLResponse,
-    dependencies=[Depends(get_current_admin_user)],
-)
-async def revoke_release_upload_token(
-    request: Request, db: AsyncSession = Depends(get_db)
-) -> HTMLResponse:
-    await app_config_service.revoke_release_upload_token(db)
-    return templates.TemplateResponse(
-        request, "game_log/_setup_panel.html", await _setup_panel_context(db)
+        "game_log/_device_result.html",
+        {"result": "denied" if denied else "not_found"},
     )
 
 
 @router.post(
-    "/game-log/api-key",
-    response_class=HTMLResponse,
-    dependencies=[Depends(get_current_admin_user)],
+    "/api/game-log/agent/pair",
+    response_model=DeviceCodeResponse,
+    include_in_schema=False,
 )
-async def generate_game_log_api_key(
-    request: Request, db: AsyncSession = Depends(get_db)
-) -> HTMLResponse:
-    raw_key = await app_config_service.generate_game_log_api_key(db)
-    return templates.TemplateResponse(
-        request,
-        "game_log/_setup_panel.html",
-        await _setup_panel_context(db, new_api_key=raw_key),
+async def create_device_pairing(request: Request) -> DeviceCodeResponse:
+    """デスクトップエージェント起動時に呼ばれる。認証不要（このコード自体が短命の共有シークレット）。"""
+    entry = device_auth_service.create_device_code()
+    verification_uri = str(
+        request.url_for("device_verification_page").include_query_params(code=entry.user_code)
+    )
+    return DeviceCodeResponse(
+        device_code=entry.device_code,
+        user_code=entry.user_code,
+        verification_uri=verification_uri,
+        expires_in=device_auth_service.CODE_TTL_SECONDS,
+        interval=device_auth_service.POLL_INTERVAL_SECONDS,
     )
 
 
-@router.delete(
-    "/game-log/api-key",
-    response_class=HTMLResponse,
-    dependencies=[Depends(get_current_admin_user)],
+@router.post(
+    "/api/game-log/agent/pair/poll",
+    response_model=DevicePollResponse,
+    include_in_schema=False,
 )
-async def revoke_game_log_api_key(
-    request: Request, db: AsyncSession = Depends(get_db)
-) -> HTMLResponse:
-    await app_config_service.revoke_game_log_api_key(db)
-    return templates.TemplateResponse(
-        request, "game_log/_setup_panel.html", await _setup_panel_context(db)
-    )
+async def poll_device_pairing(payload: DevicePollRequest) -> DevicePollResponse:
+    entry = device_auth_service.poll(payload.device_code)
+    if entry is None:
+        return DevicePollResponse(status="expired_or_unknown")
+    if entry.status == "approved":
+        return DevicePollResponse(status="approved", token=entry.issued_token)
+    if entry.status == "denied":
+        return DevicePollResponse(status="denied")
+    return DevicePollResponse(status="pending")
 
 
 @router.post(

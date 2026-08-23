@@ -3,7 +3,7 @@
 VRChatを起動しているPC上で常駐させる、ダッシュボード本体とは別プロセスのツールです。
 タスクトレイに常駐し、VRChatクライアントのローカルログを監視・解析して、訪問した
 インスタンスごとの「プレイヤー参加/退出」「動画再生URL」をダッシュボードへ送信します。
-ダッシュボードサーバーからの自動更新にも対応しています。
+GitHub Releasesからの自動更新にも対応しています。
 
 VRChat公式APIには、フレンド以外の参加者の入退室や動画再生URLは一切含まれていません（これらは
 VRChatクライアントがローカルに出力するログファイルにのみ存在します）。そのためダッシュボード
@@ -12,26 +12,54 @@ PC上で動かす必要があります。
 
 ## エンドユーザー向け: 使い方
 
-1. ダッシュボードの `/game-log` を管理者アカウントで開き、「エージェント連携の設定」から
-   APIキーを発行し、`VRCDashboardAgent.exe` をダウンロードする（まだアップロードされていな
-   ければ、下記「開発者向け: ビルド方法」でビルドしてアップロードする）。
+1. [GitHub Releases](https://github.com/choko1229/VRC-Dashboard/releases)から最新の
+   `VRCDashboardAgent.exe`（タグ`desktop-agent-v<version>`）をダウンロードする。
 2. VRChatを起動しているPCで `VRCDashboardAgent.exe` を実行する。
-3. 初回起動時に表示されるダイアログに、ダッシュボードのURLと発行したAPIキーを入力する。
-4. タスクトレイにアイコンが常駐する。右クリックメニューから以下ができる。
+3. 初回起動時に表示されるダイアログにダッシュボードのURLを入力し、
+   「ブラウザでログインして開始」を押す。既定のブラウザでダッシュボードのペアリング承認画面
+   （`/game-log/device`）が自動的に開く。
+4. ダッシュボードに管理者としてログインし、表示されたコードが一致することを確認して
+   「承認する」を押す（初めて使う場合は先にログインを求められる）。APIキーの手動コピー&
+   ペーストは不要。
+5. エージェント側の待機ダイアログが自動的に閉じ、タスクトレイにアイコンが常駐する。
+   右クリックメニューから以下ができる。
    - **ダッシュボードを開く**: ブラウザでダッシュボードを開く
-   - **今すぐ更新を確認**: サーバーに新しいバージョンが公開されていないか即座に確認する
+   - **ログインし直す**: 上記3〜4の手順を再度行い、新しいトークンを取得する
+     （トークンが無効化された場合や、設定をリセットしたい場合に使う）
+   - **今すぐ更新を確認**: GitHub Releasesに新しいバージョンが公開されていないか即座に確認する
    - **スタートアップに登録**: Windowsログイン時に自動起動するようにする/解除する
    - **終了**: ツールを終了する
 
-設定（サーバーURL・APIキー）は `%LOCALAPPDATA%\VRCDashboardAgent\config.json` に保存される。
+設定（サーバーURL・発行されたトークン）は `%LOCALAPPDATA%\VRCDashboardAgent\config.json` に
+保存される。ダッシュボード側で個々のトークンを無効化したい場合は、`/game-log`の
+「エージェント連携の設定」（管理者のみ）の一覧から行う。複数のPCでエージェントを動かしても、
+それぞれ別のトークンが発行されるため、片方を無効化しても他方には影響しない。
+
+## ペアリング（ログイン）の仕組み
+
+OAuth 2.0 Device Authorization Grant（RFC 8628）に似た方式。
+
+1. エージェントが`POST /api/game-log/agent/pair`でペアリングコード一式
+   （device_code・8桁のuser_code・verification_uri）を取得する。
+2. エージェントは既定のブラウザで`verification_uri`（コード入り）を開く。
+3. ダッシュボードに管理者としてログイン中のユーザーがコードを確認して承認する
+   （`POST /game-log/device/approve`）。承認するとサーバー側で新しいトークンが1件発行される。
+4. エージェントは`POST /api/game-log/agent/pair/poll`を数秒おきにポーリングし、
+   承認されたらトークンを受け取って`config.json`に保存する。
+5. 以降は`Authorization: Bearer <トークン>`で`POST /api/game-log/events`等に認証する。
+
+ペアリングコードは有効期限10分の使い捨てで、サーバーのメモリ上でのみ管理する
+（DBには保存しない）。
 
 ## 自動更新の仕組み
 
-- 起動時と、以後6時間ごとにダッシュボードの `GET /api/game-log/agent/version` を確認する。
-- サーバー側のバージョンが手元より新しければ `GET /api/game-log/agent/download` から新しい
-  exeをダウンロードし、自分自身のファイルを置き換えて再起動する
-  （Windowsでは実行中のexeファイルもリネームできるため、現在のexeを`.old`にリネームしてから
-  新しいexeを配置し、新プロセスを起動して自分は終了する）。
+- 配布はGitHub Releases（タグ`desktop-agent-v<version>`、`.exe`アセット付き）で行う。
+  ダッシュボードサーバー自体はexeを保持・配信しない。
+- 起動時と、以後6時間ごとに`GET https://api.github.com/repos/choko1229/VRC-Dashboard/releases/latest`
+  を確認する（公開リポジトリのため認証不要）。
+- 最新タグのバージョンが手元より新しければアセットをダウンロードし、自分自身のファイルを
+  置き換えて再起動する（Windowsでは実行中のexeファイルもリネームできるため、現在のexeを
+  `.old`にリネームしてから新しいexeを配置し、新プロセスを起動して自分は終了する）。
 - 初回起動時、実行ファイルは書き込み可能な安定パス（`%LOCALAPPDATA%\VRCDashboardAgent\
   VRCDashboardAgent.exe`）へ自動的にコピーされる（自己更新にはこの場所への書き込み権限が要る
   ため）。ダウンロードした場所（Downloadsフォルダ等）からダブルクリックで起動すれば、以後は
@@ -39,56 +67,46 @@ PC上で動かす必要があります。
 
 ## 開発者向け: ビルド方法
 
-exe化にはPyInstaller・pystray・Pillowを使う（本体アプリの実行には不要なため、
-`pyproject.toml`の依存関係には含めていない）。
+exe化にはPyInstaller・pystray・Pillow・truststoreを使う（本体アプリの実行には不要なため、
+`pyproject.toml`の依存関係には含めていない）。GitHub Releasesへのアップロードには
+[GitHub CLI（`gh`）](https://cli.github.com/)を使う。
 
 ```bash
 .venv/Scripts/pip install -r desktop_agent/requirements-build.txt
+# ghが無ければ: winget install --id GitHub.cli -e --scope user
+gh auth login   # 初回のみ（`repo`スコープが必要）
 powershell -File desktop_agent/build.ps1
 ```
 
-`desktop_agent/dist/VRCDashboardAgent.exe` が生成される。
-
-### ビルド後の自動アップロード
-
-`build.ps1` はビルドに続けて、`desktop_agent/version.py` の `__version__` と生成したexeを
-ダッシュボードへ自動でアップロードする（`POST /game-log/agent/release`）。アップロード先は
-次のいずれかで指定する。
-
-- `powershell -File desktop_agent/build.ps1 -ServerUrl https://your-dashboard.example.com -ReleaseToken <トークン>`
-- または `desktop_agent/release_config.local.json`（`release_config.local.json.example` を
-  コピーして作成。リリーストークンを含むためgit管理対象外）
-
-リリーストークンはダッシュボードの `/game-log` の「エージェント連携の設定」（管理者のみ）
-から発行する（ゲームログ取り込み用APIキーとは別物で、新しいビルドをアップロードできる強い
-権限を持つため別のシークレットとして扱っている）。
-
-どちらも指定しない場合、またはビルドのみ行いたい場合は `-NoUpload` を付ければアップロードを
-スキップしてビルドだけ行う。サーバーは常に最新の1本だけを保持する（バージョン履歴は持たない）。
+`build.ps1`はビルドに続けて、`desktop_agent/version.py`の`__version__`をタグ名
+（`desktop-agent-v<version>`）としてGitHub Releasesへ自動作成/更新する。`gh`が無い/未認証の
+場合、または`-NoUpload`を付けた場合はビルドのみ行う。
 
 新しいバージョンを配布する手順:
 
-1. `desktop_agent/version.py` の `__version__` を上げる。
-2. `powershell -File desktop_agent/build.ps1` を実行する（ビルド→アップロードが自動で行われる）。
+1. `desktop_agent/version.py`の`__version__`を上げる。
+2. `powershell -File desktop_agent/build.ps1`を実行する（ビルド→GitHub Releasesへの
+   アップロードが自動で行われる）。
 
-手動でアップロードしたい場合は、ダッシュボードの `/game-log` の「エージェント連携の設定」から
-バージョン番号と生成されたexeを直接アップロードすることもできる（管理者としてログインした
-セッションでも同じアップロードフォームが使える）。
-
-開発中は `python -m desktop_agent.main` でexe化せずに直接実行できる（この場合、自己更新・
+開発中は`python -m desktop_agent.main`でexe化せずに直接実行できる（この場合、自己更新・
 スタートアップ登録は「実行中のファイルを安全に置き換える先」が無いため無効になる）。
 
 ## ソースの構成
 
 - `gamelog_parser.py`: VRChatログ1行の解析ロジック（標準ライブラリのみ）
 - `gamelog_watcher.py`: ログファイルのtail・イベント送信ロジック（`GameLogWatcher`）。
-  単独でPythonスクリプトとして動かすことも可能（`python gamelog_watcher.py --server-url ... --api-key ...`）
-- `updater.py`: バージョン比較・ダウンロード・自己置換
+  単独でPythonスクリプトとして動かすことも可能
+  （`python gamelog_watcher.py --server-url ... --api-key ...`、ただしその場合は
+  `/game-log`の「エージェント連携の設定」から手動でトークンを発行する必要がある）
+- `device_pairing.py`: ブラウザでログイン→承認、というペアリングフロー（コード取得・
+  ブラウザを開く・ポーリング）
+- `updater.py`: GitHub Releasesでのバージョン比較・ダウンロード・自己置換
 - `startup.py`: Windowsスタートアップ（`HKCU\...\Run`）への登録・解除
 - `config.py` / `paths.py`: 設定・状態ファイルのパス解決
-- `first_run_dialog.py`: 初回起動時の設定入力ダイアログ（tkinter）
+- `first_run_dialog.py`: 初回起動時の設定入力・ペアリング待ちダイアログ（tkinter）
 - `tray_app.py`: タスクトレイアイコン・メニュー（pystray）
-- `main.py`: エントリポイント（開発実行・PyInstallerどちらの起点にもなる）
+- `main.py`: エントリポイント（開発実行・PyInstallerどちらの起点にもなる。OSネイティブの
+  TLS証明書検証を使うための`truststore.inject_into_ssl()`もここで最初に呼ぶ）
 
 ## 制限・注意事項
 
@@ -99,6 +117,9 @@ powershell -File desktop_agent/build.ps1
   それを超えると古いイベントから破棄します）。
 - exeは自己署名・コード署名を行っていないため、初回実行時にWindows SmartScreenの警告が
   表示される場合があります（「詳細情報」→「実行」で起動できる）。
+- PyInstaller同梱のOpenSSLが、環境によっては一部サイトのTLS証明書チェーン検証に失敗する
+  ことがあるため（`CERTIFICATE_VERIFY_FAILED: Basic Constraints of CA cert not marked
+  critical`）、`truststore`パッケージでOSのネイティブ証明書検証に差し替えている。
 
 ## TODO
 

@@ -39,12 +39,19 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
   「プレイヤー参加/退出」「動画再生URL」を記録・表示するVRCXのゲームログ画面に近い機能。
   VRChat公式APIにはフレンド以外の参加者の入退室や動画再生URLは一切存在しない（ゲーム
   クライアントのローカルログにのみ出力される）ため、Pipeline/APIとは別経路で成立している。
-  エージェントは`/game-log`の「エージェント連携の設定」（管理者のみ）で発行したAPIキーで
-  `POST /api/game-log/events`に認証し、`GET /api/game-log/agent/version`で自身の新しい
-  ビルドが公開されていないか定期確認して自己更新する。管理者は同画面から新しいビルド
-  （exe）をアップロードして配布バージョンを更新できる（`POST /game-log/agent/release`は
-  管理者セッションに加え、同画面で発行できる別のリリースアップロード用トークンでも認証でき、
-  `desktop_agent/build.ps1`はビルド後にこのトークンで自動アップロードする）。
+  - **配布**: [GitHub Releases](https://github.com/choko1229/VRC-Dashboard/releases)
+    （タグ`desktop-agent-v<version>`）でexeを配布する。ダッシュボードサーバー自体はexeを
+    保持・配信しない。`desktop_agent/build.ps1`がビルド後にGitHub CLI（`gh`）で
+    自動的にリリースを作成/更新する。
+  - **認証**: APIキーの手動コピー&ペーストではなく、OAuth 2.0 Device Authorization Grant
+    （RFC 8628）に似た「ブラウザでログイン→承認」方式でペアリングする。エージェント起動時に
+    `POST /api/game-log/agent/pair`でコードを取得してブラウザで`/game-log/device`を開き、
+    管理者としてログイン中のユーザーが表示されたコードを承認すると、エージェントが
+    `POST /api/game-log/agent/pair/poll`のポーリングでトークンを自動的に受け取る
+    （`game_log_agent_token`テーブルで複数デバイス分のトークンを個別に管理するため、
+    後から別のPCをペアリングしても既存デバイスのトークンは無効化されない）。
+  - **自動更新**: 起動時と6時間ごとにGitHub Releasesの最新版を確認し、自身より新しければ
+    ダウンロードして自己置換・再起動する（サーバーには自動更新用のエンドポイントを持たない）。
   詳細は`desktop_agent/README.md`参照。
 - **アバター準備状況**: 自分のアバター一覧の同期、タグ付け、メモ管理。
 - **今日の予定**: 手動登録またはVRChatグループカレンダーからの取り込みによるスケジュール管理
@@ -168,7 +175,13 @@ tests/                  # unit / integration
   最善努力の実装であり、実際のログでの動作確認・調整が必要になる場合がある。
 - 「VRCダッシュボード連携ツール」（`desktop_agent/`）のexeは自己署名・コード署名を行っていない
   ため、初回実行時にWindows SmartScreenの警告が表示される場合がある。自動更新は
-  サーバー側の配布バージョンと自身の`desktop_agent/version.py`を比較し、実行中のexeファイルを
+  GitHub Releasesの最新タグと自身の`desktop_agent/version.py`を比較し、実行中のexeファイルを
   リネームしてから新しいexeに置き換える方式（Windows特有の挙動を利用）で実現している。
-  ビルドにのみpystray/Pillow/PyInstallerを使うため、これらは本体アプリの`pyproject.toml`の
-  依存関係には含めていない（`desktop_agent/requirements-build.txt`参照）。
+  ビルドにのみpystray/Pillow/PyInstaller/truststoreを使うため、これらは本体アプリの
+  `pyproject.toml`の依存関係には含めていない（`desktop_agent/requirements-build.txt`参照）。
+- デスクトップエージェントの同梱Python（PyInstallerがexeに含めるOpenSSL）は、環境によっては
+  GitHub等一部サイトのTLS証明書チェーン検証に失敗することがある
+  （`CERTIFICATE_VERIFY_FAILED: Basic Constraints of CA cert not marked critical`）。
+  これはOpenSSL 3.x系の厳格な検証とサイト側の証明書チェーンの組み合わせによる既知の相性問題で、
+  Windows標準のTLS検証（curl等が使うもの）では発生しない。`truststore`パッケージでOSの
+  ネイティブ証明書検証に差し替えることで回避している（`desktop_agent/main.py`参照）。

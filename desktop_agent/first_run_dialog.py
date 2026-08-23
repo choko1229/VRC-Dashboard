@@ -1,45 +1,77 @@
-"""初回起動時にダッシュボードURL・APIキーを入力してもらう簡易ダイアログ（tkinter、標準ライブラリのみ）。"""
+"""初回起動時にダッシュボードURLを入力してもらい、ブラウザでのペアリングログインへ導く
+簡易ダイアログ（tkinter、標準ライブラリのみ）。
+
+以前はAPIキーの手動コピー&ペーストを求めていたが、ブラウザでログイン→コードを承認、
+という流れ（desktop_agent.device_pairing）に置き換えた。
+"""
 
 from __future__ import annotations
 
+import logging
+import threading
 import tkinter as tk
 from tkinter import messagebox
 
 from desktop_agent.config import AgentConfig
+from desktop_agent.device_pairing import pair_with_browser
+
+logger = logging.getLogger("gamelog_watcher.first_run_dialog")
 
 
 def prompt_for_config() -> AgentConfig | None:
-    """入力を受け付け、保存前の設定を返す。ウィンドウを閉じた場合はNoneを返す。"""
+    """URL入力→ペアリング承認待ちを行う。成功時はAgentConfigを、キャンセル時はNoneを返す。"""
     root = tk.Tk()
     root.title("VRCダッシュボード連携ツール - 初期設定")
     root.resizable(False, False)
 
-    tk.Label(root, text="ダッシュボードのURL（例: https://vrc.example.com）").grid(
-        row=0, column=0, sticky="w", padx=10, pady=(10, 0)
-    )
-    server_entry = tk.Entry(root, width=48)
-    server_entry.grid(row=1, column=0, padx=10)
-
-    tk.Label(root, text="APIキー（ダッシュボードの/game-logで発行）").grid(
-        row=2, column=0, sticky="w", padx=10, pady=(10, 0)
-    )
-    key_entry = tk.Entry(root, width=48, show="*")
-    key_entry.grid(row=3, column=0, padx=10)
-
     result: dict[str, AgentConfig | None] = {"value": None}
 
-    def on_submit() -> None:
-        server_url = server_entry.get().strip()
-        api_key = key_entry.get().strip()
-        if not server_url or not api_key:
-            messagebox.showerror("入力エラー", "両方入力してください。", parent=root)
+    frame = tk.Frame(root)
+    frame.pack(padx=16, pady=16)
+
+    tk.Label(frame, text="ダッシュボードのURL（例: https://vrc.example.com）").pack(anchor="w")
+    server_entry = tk.Entry(frame, width=48)
+    server_entry.pack(pady=(4, 8))
+    server_entry.focus_set()
+
+    status_label = tk.Label(frame, text="", fg="#666666", wraplength=360, justify="left")
+    status_label.pack(anchor="w", pady=(0, 8))
+
+    start_button = tk.Button(frame, text="ブラウザでログインして開始")
+    start_button.pack()
+
+    def on_pairing_result(token: str | None, server_url: str) -> None:
+        if token is None:
+            status_label.config(text="承認されませんでした。もう一度お試しください。")
+            start_button.config(state=tk.NORMAL)
             return
-        result["value"] = AgentConfig(server_url=server_url, api_key=api_key)
+        result["value"] = AgentConfig(server_url=server_url, api_key=token)
         root.destroy()
 
-    tk.Button(root, text="保存して開始", command=on_submit).grid(
-        row=4, column=0, pady=10
-    )
-    server_entry.focus_set()
+    def run_pairing_in_background(server_url: str) -> None:
+        token: str | None = None
+        try:
+            token = pair_with_browser(server_url)
+        except Exception:
+            logger.exception("ペアリングに失敗しました")
+        # tkinterはメインスレッド以外からのUI操作が不可なため、after()で戻す。
+        root.after(0, on_pairing_result, token, server_url)
+
+    def on_start() -> None:
+        server_url = server_entry.get().strip()
+        if not server_url:
+            messagebox.showerror("入力エラー", "URLを入力してください。", parent=root)
+            return
+        start_button.config(state=tk.DISABLED)
+        status_label.config(
+            text="ブラウザが開きます。ダッシュボードにログインし、"
+            "表示されたコードを承認してください..."
+        )
+        threading.Thread(
+            target=run_pairing_in_background, args=(server_url,), daemon=True
+        ).start()
+
+    start_button.config(command=on_start)
+
     root.mainloop()
     return result["value"]

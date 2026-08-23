@@ -36,8 +36,22 @@ class GameLogIngestRequest(BaseModel):
     events: list[GameLogEventIn]
 
 
-class AgentVersionResponse(BaseModel):
-    """デスクトップエージェントの自己更新チェック（GET /api/game-log/agent/version）の応答。"""
+class DeviceCodeResponse(BaseModel):
+    """POST /api/game-log/agent/pair の応答。RFC 8628のdevice authorization responseに準拠。"""
 
-    version: str
-    download_available: bool
+    device_code: str
+    user_code: str
+    verification_uri: str
+    expires_in: int
+    interval: int
+
+
+class DevicePollRequest(BaseModel):
+    device_code: str
+
+
+class DevicePollResponse(BaseModel):
+    # pending: 未承認 / approved: 承認済み(tokenを含む) / denied: 拒否された /
+    # expired_or_unknown: 期限切れまたは存在しないdevice_code
+    status: Literal["pending", "approved", "denied", "expired_or_unknown"]
+    token: str | None = None

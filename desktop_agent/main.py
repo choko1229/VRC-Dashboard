@@ -13,6 +13,14 @@ import sys
 import threading
 from pathlib import Path
 
+import truststore
+
+# WindowsのOS証明書ストアを使ってTLS検証する（PyInstallerが同梱するOpenSSLの証明書検証が、
+# 環境によってはGitHubのTLS証明書チェーンを検証できない場合があるため。curl等が使う
+# ネイティブ検証と同じ結果になるよう、標準のssl検証をこれに差し替える）。
+# HTTPS通信を行うどのコードよりも先に実行する必要がある。
+truststore.inject_into_ssl()
+
 # PyInstallerでexe化した状態・`python desktop_agent/main.py`で直接実行した状態の両方で
 # `desktop_agent`パッケージを絶対importできるようにする。
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))

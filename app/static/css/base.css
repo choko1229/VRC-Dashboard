@@ -1022,35 +1022,14 @@ body {
     margin: 0;
 }
 
-.gamelog-api-key-value {
-    display: block;
-    padding: var(--space-2) var(--space-3);
-    background-color: var(--color-surface);
-    border: 1px solid var(--color-gamelog-border);
-    border-radius: var(--radius-sm);
-    word-break: break-all;
-    font-size: var(--text-sm);
-}
-
-.gamelog-setup-actions {
-    display: flex;
-    gap: var(--space-2);
-}
-
-.gamelog-setup-divider {
-    border: none;
-    border-top: 1px solid var(--color-gamelog-border);
-    margin: var(--space-2) 0;
-}
-
-.gamelog-release-form {
+.gamelog-inline-form {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-2);
 }
 
-.gamelog-release-form input[type="text"] {
+.gamelog-inline-form input[type="text"] {
     flex: 1 1 12em;
 }
 

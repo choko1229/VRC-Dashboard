@@ -1,0 +1,12 @@
+{% if result == "approved" %}
+<p class="gamelog-setup-warning" style="color: var(--color-avatars-hover);">
+    承認しました。エージェント側で自動的にログインが完了します。この画面は閉じて構いません。
+</p>
+{% elif result == "denied" %}
+<p class="text-muted">拒否しました。</p>
+{% elif result == "not_found" %}
+<p class="gamelog-setup-warning">
+    コードが見つからないか、有効期限が切れています。エージェント側の画面でコードを確認し、
+    必要であればエージェントを再起動してやり直してください。
+</p>
+{% endif %}

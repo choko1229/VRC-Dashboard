@@ -1,73 +1,31 @@
-{% from "partials/icons.html" import icon_key %}
+{% from "partials/icons.html" import icon_trash %}
 <div class="gamelog-setup-panel">
-    {% if new_api_key %}
-    <p class="gamelog-setup-warning">
-        新しいAPIキーです。この画面を離れると二度と表示されません。今すぐエージェントの設定に貼り付けてください。
-    </p>
-    <code class="gamelog-api-key-value">{{ new_api_key }}</code>
-    {% endif %}
-
     <p class="text-muted">
-        {% if is_configured %}APIキー発行済み。{% else %}APIキー未発行です。{% endif %}
-        {% if agent_download_available %}
-        「VRCダッシュボード連携ツール」（<a href="/game-log/agent/download">VRCDashboardAgent.exe</a>
-        v{{ agent_version }}）をVRChatを起動しているPCでダウンロード・起動し、
-        {% else %}
-        まだ配布用のexeがアップロードされていません。下記から
-        <a href="/game-log/agent-script">gamelog_watcher.py</a>（Python実行が必要）を
-        VRChatを起動しているPCで動かすか、exeをビルドしてアップロードしてください。起動後は
-        {% endif %}
-        初回起動時のダイアログに下記URLとAPIキーを入力してください。タスクトレイに常駐し、
-        自動更新にも対応しています。
+        「VRCダッシュボード連携ツール」（<a href="{{ github_releases_url }}" target="_blank" rel="noopener noreferrer">GitHub Releases</a>からダウンロード）を
+        VRChatを起動しているPCで起動すると、ブラウザでこのダッシュボードのログイン画面が自動的に開きます。
+        管理者としてログインした状態で表示されるコードを承認すると、エージェントが自動的に認証されます
+        （APIキーを手動でコピー&amp;ペーストする必要はありません）。
     </p>
-    <p class="text-muted">送信先URL: <code>{{ request.url_for("ingest_game_log_events") }}</code></p>
-
-    <div class="gamelog-setup-actions">
-        <button type="button" class="btn btn-primary" hx-post="/game-log/api-key" hx-target="closest .gamelog-setup-panel" hx-swap="outerHTML">
-            {{ icon_key(16) }} {% if is_configured %}APIキーを再発行{% else %}APIキーを発行{% endif %}
-        </button>
-        {% if is_configured %}
-        <button type="button" class="btn btn-ghost" hx-delete="/game-log/api-key" hx-target="closest .gamelog-setup-panel" hx-swap="outerHTML" hx-confirm="APIキーを無効化しますか？現在動いているエージェントは送信できなくなります。">
-            無効化
-        </button>
-        {% endif %}
-    </div>
-
-    <hr class="gamelog-setup-divider">
-
-    {% if new_release_token %}
-    <p class="gamelog-setup-warning">
-        新しいリリースアップロード用トークンです。この画面を離れると二度と表示されません。
-        <code>desktop_agent/release_config.local.json</code> に貼り付けてください。
-    </p>
-    <code class="gamelog-api-key-value">{{ new_release_token }}</code>
-    {% endif %}
-
     <p class="text-muted">
-        配布中のビルド: {% if agent_version %}<strong>v{{ agent_version }}</strong>{% else %}未アップロード{% endif %}
-        。{% if release_token_configured %}リリースアップロード用トークン発行済み。{% else %}
-        リリースアップロード用トークン未発行です。{% endif %}
-        <code>desktop_agent/build.ps1</code> はこのトークンを使ってビルド後に自動アップロード
-        する（手順は<code>desktop_agent/README.md</code>参照）。
+        Pythonをそのまま動かしたい場合は<a href="/game-log/agent-script">gamelog_watcher.py</a>も
+        利用できますが、その場合はAPIキーの手動発行が必要です（下記トークン一覧を参照）。
     </p>
-    <div class="gamelog-setup-actions">
-        <button type="button" class="btn btn-primary" hx-post="/game-log/release-token" hx-target="closest .gamelog-setup-panel" hx-swap="outerHTML">
-            {{ icon_key(16) }} {% if release_token_configured %}トークンを再発行{% else %}トークンを発行{% endif %}
-        </button>
-        {% if release_token_configured %}
-        <button type="button" class="btn btn-ghost" hx-delete="/game-log/release-token" hx-target="closest .gamelog-setup-panel" hx-swap="outerHTML" hx-confirm="トークンを無効化しますか？build.ps1からの自動アップロードができなくなります。">
-            無効化
-        </button>
-        {% endif %}
-    </div>
 
-    <form class="gamelog-release-form"
-        hx-post="/game-log/agent/release"
-        hx-encoding="multipart/form-data"
-        hx-target="closest .gamelog-setup-panel"
-        hx-swap="outerHTML">
-        <input type="text" name="version" placeholder="バージョン（例: 0.2.0）" required>
-        <input type="file" name="file" accept=".exe" required>
-        <button type="submit" class="btn btn-ghost">手動アップロード</button>
-    </form>
+    {% if agent_tokens %}
+    <p class="text-muted">認証済みのエージェント:</p>
+    <ul class="tags-list">
+        {% for token in agent_tokens %}
+        <li>
+            <span>{{ token.label or "（名称未設定）" }}</span>
+            <span class="text-muted">
+                発行: {{ token.created_at.strftime("%Y/%m/%d") }}
+                {% if token.last_used_at %}・最終利用: {{ token.last_used_at.strftime("%Y/%m/%d %H:%M") }}{% else %}・未使用{% endif %}
+            </span>
+            <button type="button" class="icon-btn" title="無効化" hx-delete="/game-log/agent-token/{{ token.id }}" hx-target="closest .gamelog-setup-panel" hx-swap="outerHTML" hx-confirm="このエージェントのトークンを無効化しますか？">{{ icon_trash(16) }}</button>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-muted">認証済みのエージェントはまだありません。</p>
+    {% endif %}
 </div>

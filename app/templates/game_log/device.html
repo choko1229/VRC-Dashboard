@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}エージェントのペアリング承認{% endblock %}
+{% block content %}
+<h1 class="app-heading">エージェントのペアリング承認</h1>
+<p class="text-muted">
+    「VRCダッシュボード連携ツール」を起動すると、このページが自動的に開きます。
+    表示されているコードと下のコードが一致することを確認し、承認してください。
+</p>
+
+<div id="device-result">
+    {% include "game_log/_device_result.html" %}
+</div>
+
+<form class="gamelog-inline-form" hx-target="#device-result" hx-swap="innerHTML">
+    <input type="text" name="user_code" value="{{ prefilled_code }}" placeholder="XXXX-XXXX" maxlength="9" style="text-transform: uppercase;" required>
+    <input type="text" name="label" placeholder="このデバイスの名前（任意・例: 自宅PC）">
+    <button type="submit" hx-post="/game-log/device/approve" class="btn btn-primary">承認する</button>
+    <button type="submit" hx-post="/game-log/device/deny" class="btn btn-ghost">拒否する</button>
+</form>
+{% endblock %}

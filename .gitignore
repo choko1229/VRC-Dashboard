@@ -183,13 +183,8 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-# デスクトップエージェントのPyInstallerビルド生成物（build.ps1で再生成される）
+# デスクトップエージェントのPyInstallerビルド生成物（build.ps1で再生成される。
+# 配布はGitHub Releasesで行うため、data/への保存は行わない）
 desktop_agent/build/
 desktop_agent/dist/
 desktop_agent/*.spec
-
-# 配布用エージェントバイナリ（管理画面からアップロードされ、サーバーが保持する）
-data/agent_releases/
-
-# ビルドスクリプトの自動アップロード先設定（リリーストークンを含むためgit管理対象外）
-desktop_agent/release_config.local.json
