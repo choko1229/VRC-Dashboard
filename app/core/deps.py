@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, Request
+from fastapi import Depends, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.security import SecretCipher, get_secret_cipher
 from app.db.session import get_db
 from app.models.dashboard_user import DashboardUser
+from app.services import app_config_service
 from app.services.session_service import get_user_for_session_token
 
 
@@ -18,6 +19,10 @@ class NotAuthenticatedError(Exception):
 
 class NotAdminError(Exception):
     """管理者権限が必要な操作を非管理者が行おうとした。"""
+
+
+class InvalidGameLogApiKeyError(Exception):
+    """ゲームログ取り込みAPIキーが未設定/不正。"""
 
 
 async def get_current_user(
@@ -53,3 +58,15 @@ async def get_current_admin_user(
 
 def get_cipher(settings: Settings = Depends(get_settings)) -> SecretCipher:
     return get_secret_cipher(settings)
+
+
+async def require_game_log_api_key(
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """ローカルエージェントからのゲームログ取り込みを`Authorization: Bearer <key>`で認証する。"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise InvalidGameLogApiKeyError
+    raw_key = authorization.removeprefix("Bearer ").strip()
+    if not raw_key or not await app_config_service.verify_game_log_api_key(db, raw_key):
+        raise InvalidGameLogApiKeyError

@@ -11,6 +11,8 @@ from app.models.friend_group import FriendGroup
 from app.models.friend_group_membership import FriendGroupMembership
 from app.models.friend_notification_pref import FriendNotificationPref
 from app.models.friend_presence_event import FriendPresenceEvent
+from app.models.game_log_event import GameLogEvent
+from app.models.game_log_instance import GameLogInstance
 from app.models.schedule_event import ScheduleEvent
 from app.models.sync_cursor import SyncCursor
 from app.models.tag import Tag
@@ -29,6 +31,8 @@ __all__ = [
     "FriendGroupMembership",
     "FriendNotificationPref",
     "FriendPresenceEvent",
+    "GameLogEvent",
+    "GameLogInstance",
     "ScheduleEvent",
     "SyncCursor",
     "Tag",

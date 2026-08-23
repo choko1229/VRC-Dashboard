@@ -8,12 +8,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.deps import NotAdminError, NotAuthenticatedError
+from app.core.deps import InvalidGameLogApiKeyError, NotAdminError, NotAuthenticatedError
 from app.core.logging import configure_logging
 from app.core.security import get_secret_cipher
 from app.core.templating import templates
@@ -21,7 +21,17 @@ from app.db.base import create_engine_and_sessionmaker
 from app.notifications.base import NotificationSender
 from app.notifications.composite import CompositeNotificationSender
 from app.notifications.webpush_sender import WebPushSender
-from app.routers import auth, avatars, dashboard, friends, schedule, settings, setup, webpush
+from app.routers import (
+    auth,
+    avatars,
+    dashboard,
+    friends,
+    game_log,
+    schedule,
+    settings,
+    setup,
+    webpush,
+)
 from app.services import app_config_service, notification_service, vrchat_session_service
 from app.services.vrchat.pipeline import PipelineManager
 
@@ -119,6 +129,7 @@ def create_app() -> FastAPI:
     app.include_router(avatars.router)
     app.include_router(schedule.router)
     app.include_router(webpush.router)
+    app.include_router(game_log.router)
 
     @app.get("/sw.js", include_in_schema=False)
     async def service_worker() -> FileResponse:
@@ -139,6 +150,12 @@ def create_app() -> FastAPI:
             {"reason": "この操作には管理者権限が必要です。"},
             status_code=403,
         )
+
+    @app.exception_handler(InvalidGameLogApiKeyError)
+    async def handle_invalid_game_log_api_key(
+        request: Request, exc: InvalidGameLogApiKeyError
+    ) -> JSONResponse:
+        return JSONResponse({"detail": "APIキーが無効です。"}, status_code=401)
 
     return app
 

@@ -1,0 +1,24 @@
+{% from "partials/icons.html" import icon_player_join, icon_player_leave, icon_play %}
+{% if not events %}
+<p class="placeholder">記録されたイベントがありません。</p>
+{% else %}
+<ul class="gamelog-event-list">
+    {% for event in events %}
+    <li class="gamelog-event-row">
+        <span class="gamelog-event-time">{{ event.occurred_at.strftime("%m/%d %H:%M") }}</span>
+        {% if event.event_type == "player_join" %}
+        <span class="gamelog-event-tag gamelog-event-tag-join">{{ icon_player_join() }}プレイヤー参加</span>
+        <span class="gamelog-event-detail">{{ event.player_name or "不明なユーザー" }}</span>
+        {% elif event.event_type == "player_leave" %}
+        <span class="gamelog-event-tag gamelog-event-tag-leave">{{ icon_player_leave() }}プレイヤー退出</span>
+        <span class="gamelog-event-detail">{{ event.player_name or "不明なユーザー" }}</span>
+        {% elif event.event_type == "video_play" %}
+        <span class="gamelog-event-tag gamelog-event-tag-video">{{ icon_play() }}動画を再生</span>
+        <span class="gamelog-event-detail">
+            {% if event.detail %}<a href="{{ event.detail }}" target="_blank" rel="noopener noreferrer">{{ event.detail }}</a>{% endif %}
+        </span>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}

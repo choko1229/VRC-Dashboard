@@ -1,0 +1,31 @@
+{% from "partials/icons.html" import icon_player_join, icon_player_leave, icon_play %}
+{% for summary in summaries %}
+{% set is_open_by_default = is_first_page and loop.first %}
+<details class="gamelog-instance"{% if is_open_by_default %} open{% endif %}
+    hx-get="/game-log/{{ summary.instance.id }}/events"
+    hx-trigger="{% if is_open_by_default %}load, {% endif %}toggle once"
+    hx-target="#gamelog-instance-body-{{ summary.instance.id }}"
+    hx-swap="innerHTML">
+    <summary class="gamelog-instance-summary">
+        <span class="gamelog-instance-title">{{ summary.instance.world_name or "不明なワールド" }}</span>
+        <span class="gamelog-instance-meta">
+            {{ summary.instance.joined_at.strftime("%Y/%m/%d %H:%M") }}
+            ・{{ summary.duration_label }}{% if summary.instance.left_at is none %}（滞在中）{% endif %}
+        </span>
+        <span class="gamelog-instance-badges">
+            <span class="gamelog-badge" title="プレイヤー参加">{{ icon_player_join(14) }}{{ summary.join_count }}</span>
+            <span class="gamelog-badge" title="プレイヤー退出">{{ icon_player_leave(14) }}{{ summary.leave_count }}</span>
+            <span class="gamelog-badge" title="動画再生">{{ icon_play(14) }}{{ summary.video_count }}</span>
+        </span>
+    </summary>
+    <div id="gamelog-instance-body-{{ summary.instance.id }}" class="gamelog-instance-body">
+        <p class="placeholder">開くと読み込まれます...</p>
+    </div>
+</details>
+{% endfor %}
+{% if has_more %}
+<button type="button" class="btn btn-ghost gamelog-load-more"
+    hx-get="/game-log/page/{{ next_page }}"
+    hx-swap="outerHTML"
+    hx-target="this">もっと見る</button>
+{% endif %}

@@ -75,6 +75,12 @@
     --color-schedule-bg-soft: #FFF7ED;
     --color-schedule-border: #FED7AA;
 
+    /* ゲームログ（紫系） */
+    --color-gamelog-primary: #8B5CF6;
+    --color-gamelog-hover: #7C3AED;
+    --color-gamelog-bg-soft: #F5F3FF;
+    --color-gamelog-border: #DDD6FE;
+
     /* VRChatフレンドステータス色（公式アプリ準拠、テーマカラーとは独立） */
     --color-status-online: #3BA55D;
     --color-status-joinme: #3B82F6;
@@ -107,6 +113,11 @@
         --color-schedule-bg-soft: #3A2312;
         --color-schedule-border: #9A3412;
 
+        --color-gamelog-primary: #A78BFA;
+        --color-gamelog-hover: #8B5CF6;
+        --color-gamelog-bg-soft: #2E1F52;
+        --color-gamelog-border: #5B21B6;
+
         --color-bg: #111827;
         --color-surface: #1F2937;
         --color-text: #F3F4F6;
@@ -130,6 +141,11 @@
     --color-schedule-hover: #F97316;
     --color-schedule-bg-soft: #3A2312;
     --color-schedule-border: #9A3412;
+
+    --color-gamelog-primary: #A78BFA;
+    --color-gamelog-hover: #8B5CF6;
+    --color-gamelog-bg-soft: #2E1F52;
+    --color-gamelog-border: #5B21B6;
 
     --color-bg: #111827;
     --color-surface: #1F2937;

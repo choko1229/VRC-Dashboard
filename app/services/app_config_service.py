@@ -8,11 +8,12 @@
 from __future__ import annotations
 
 import base64
+import secrets
 
 from cryptography.hazmat.primitives.asymmetric import ec
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import SecretCipher
+from app.core.security import SecretCipher, hash_session_token
 from app.services import app_setting_service
 
 _DISCORD_CLIENT_ID_KEY = "discord_oauth_client_id"
@@ -109,3 +110,30 @@ async def get_vapid_contact_email(db: AsyncSession) -> str:
 
 async def set_vapid_contact_email(db: AsyncSession, value: str) -> None:
     await app_setting_service.set_setting(db, _VAPID_CONTACT_EMAIL_KEY, value or None)
+
+
+_GAME_LOG_API_KEY_HASH_KEY = "game_log_api_key_hash"
+
+
+async def is_game_log_api_key_configured(db: AsyncSession) -> bool:
+    return bool(await app_setting_service.get_setting(db, _GAME_LOG_API_KEY_HASH_KEY))
+
+
+async def generate_game_log_api_key(db: AsyncSession) -> str:
+    """新しいAPIキーを発行する（既存キーは無効化される）。生の値は画面表示の一度きりで、DBにはハッシュのみ保存する。"""
+    raw_key = secrets.token_urlsafe(32)
+    await app_setting_service.set_setting(
+        db, _GAME_LOG_API_KEY_HASH_KEY, hash_session_token(raw_key)
+    )
+    return raw_key
+
+
+async def revoke_game_log_api_key(db: AsyncSession) -> None:
+    await app_setting_service.set_setting(db, _GAME_LOG_API_KEY_HASH_KEY, None)
+
+
+async def verify_game_log_api_key(db: AsyncSession, raw_key: str) -> bool:
+    stored_hash = await app_setting_service.get_setting(db, _GAME_LOG_API_KEY_HASH_KEY)
+    if not stored_hash:
+        return False
+    return secrets.compare_digest(stored_hash, hash_session_token(raw_key))

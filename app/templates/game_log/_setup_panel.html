@@ -1,0 +1,27 @@
+{% from "partials/icons.html" import icon_key %}
+<div class="gamelog-setup-panel">
+    {% if new_api_key %}
+    <p class="gamelog-setup-warning">
+        新しいAPIキーです。この画面を離れると二度と表示されません。今すぐエージェントの設定に貼り付けてください。
+    </p>
+    <code class="gamelog-api-key-value">{{ new_api_key }}</code>
+    {% endif %}
+
+    <p class="text-muted">
+        {% if is_configured %}APIキー発行済み。{% else %}APIキー未発行です。{% endif %}
+        ローカルエージェント（<a href="/game-log/agent-script" download>gamelog_watcher.py</a>）を
+        VRChatを起動しているPCで動かし、下記URLとAPIキーを設定してください。
+    </p>
+    <p class="text-muted">送信先URL: <code>{{ request.url_for("ingest_game_log_events") }}</code></p>
+
+    <div class="gamelog-setup-actions">
+        <button type="button" class="btn btn-primary" hx-post="/game-log/api-key" hx-target="closest .gamelog-setup-panel" hx-swap="outerHTML">
+            {{ icon_key(16) }} {% if is_configured %}APIキーを再発行{% else %}APIキーを発行{% endif %}
+        </button>
+        {% if is_configured %}
+        <button type="button" class="btn btn-ghost" hx-delete="/game-log/api-key" hx-target="closest .gamelog-setup-panel" hx-swap="outerHTML" hx-confirm="APIキーを無効化しますか？現在動いているエージェントは送信できなくなります。">
+            無効化
+        </button>
+        {% endif %}
+    </div>
+</div>

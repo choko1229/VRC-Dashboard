@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}ゲームログ{% endblock %}
+{% block content %}
+{% set current_user = current_dashboard_user(request) %}
+<h1 class="app-heading">ゲームログ</h1>
+<p class="text-muted">
+    VRChatを起動しているPC上で動くローカルエージェントが解析したログを、インスタンス（訪問）ごとに表示します。
+    フレンド以外の参加者の入退室や動画再生URLは、VRChat公式APIには存在せずこのローカルログ経由でのみ取得できます。
+</p>
+
+{% if current_user and current_user.is_admin %}
+<details class="gamelog-setup">
+    <summary>エージェント連携の設定</summary>
+    {% include "game_log/_setup_panel.html" %}
+</details>
+{% endif %}
+
+<div class="gamelog-instance-list">
+    {% if not summaries %}
+    <p class="placeholder">まだログがありません。ローカルエージェントを起動してVRChatで遊ぶと記録されます。</p>
+    {% else %}
+    {% include "game_log/_instance_batch.html" %}
+    {% endif %}
+</div>
+{% endblock %}
