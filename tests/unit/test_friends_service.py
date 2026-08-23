@@ -273,3 +273,95 @@ async def test_compute_activity_stats_aggregates_online_events(
         assert stats.most_active_weekday == "日曜日"
         assert stats.peak_hour_range == "22:00-23:00"
         assert stats.max_count == 3
+
+
+async def test_status_update_first_sighting_does_not_log_avatar_change(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """アバターURLが未取得(None)から初めて分かった場合は「変更」として記録しない。"""
+    async with db_session_factory() as db:
+        user = VRChatUser.model_validate(
+            {
+                "id": "usr_feed1",
+                "displayName": "Feed1",
+                "status": "active",
+                "currentAvatarThumbnailImageUrl": "https://example.com/a.png",
+            }
+        )
+        await friends_service.handle_friend_status_update(db, vrchat_user=user)
+
+        events = (await db.execute(select(FriendPresenceEvent))).scalars().all()
+        assert [e.event_type for e in events] == ["status_change"]
+
+
+async def test_status_update_logs_status_change_with_previous_status(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        friend = Friend(vrchat_user_id="usr_feed2", display_name="Feed2", activity_status="busy")
+        db.add(friend)
+        await db.commit()
+
+        user = VRChatUser.model_validate(
+            {"id": "usr_feed2", "displayName": "Feed2", "status": "join me"}
+        )
+        await friends_service.handle_friend_status_update(db, vrchat_user=user)
+
+        event = (await db.execute(select(FriendPresenceEvent))).scalars().one()
+        assert event.event_type == "status_change"
+        assert event.previous_status == "busy"
+        assert event.status == "join me"
+
+
+async def test_status_update_logs_avatar_change_when_url_actually_changes(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        friend = Friend(
+            vrchat_user_id="usr_feed3",
+            display_name="Feed3",
+            activity_status="active",
+            current_avatar_thumbnail_url="https://example.com/old.png",
+        )
+        db.add(friend)
+        await db.commit()
+
+        user = VRChatUser.model_validate(
+            {
+                "id": "usr_feed3",
+                "displayName": "Feed3",
+                "status": "active",
+                "currentAvatarThumbnailImageUrl": "https://example.com/new.png",
+            }
+        )
+        await friends_service.handle_friend_status_update(db, vrchat_user=user)
+
+        events = (await db.execute(select(FriendPresenceEvent))).scalars().all()
+        assert [e.event_type for e in events] == ["avatar_change"]
+
+
+async def test_status_update_no_event_when_nothing_changed(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        friend = Friend(
+            vrchat_user_id="usr_feed4",
+            display_name="Feed4",
+            activity_status="active",
+            current_avatar_thumbnail_url="https://example.com/same.png",
+        )
+        db.add(friend)
+        await db.commit()
+
+        user = VRChatUser.model_validate(
+            {
+                "id": "usr_feed4",
+                "displayName": "Feed4",
+                "status": "active",
+                "currentAvatarThumbnailImageUrl": "https://example.com/same.png",
+            }
+        )
+        await friends_service.handle_friend_status_update(db, vrchat_user=user)
+
+        events = (await db.execute(select(FriendPresenceEvent))).scalars().all()
+        assert events == []

@@ -25,6 +25,7 @@ from app.routers import (
     auth,
     avatars,
     dashboard,
+    feed,
     friends,
     game_log,
     schedule,
@@ -130,6 +131,7 @@ def create_app() -> FastAPI:
     app.include_router(schedule.router)
     app.include_router(webpush.router)
     app.include_router(game_log.router)
+    app.include_router(feed.router)
 
     @app.get("/sw.js", include_in_schema=False)
     async def service_worker() -> FileResponse:

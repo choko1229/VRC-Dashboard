@@ -1,0 +1,45 @@
+<div class="feed-filter-bar">
+    <div class="feed-type-tabs">
+        {% for value, label in [
+            ("all", "全て"),
+            ("location_change", "現在地"),
+            ("online", "オンライン"),
+            ("offline", "オフライン"),
+            ("status_change", "ステータス"),
+            ("avatar_change", "アバター"),
+        ] %}
+        <button type="button"
+            class="feed-tab{% if event_type == value %} active{% endif %}"
+            hx-get="/feed/content"
+            hx-vals='{"event_type": {{ value|tojson }}, "favorites_only": {{ favorites_only|tojson }}, "q": {{ search|tojson }}}'
+            hx-target="#feed-content" hx-swap="innerHTML">{{ label }}</button>
+        {% endfor %}
+    </div>
+    <label class="feed-favorites-toggle">
+        <input type="checkbox"
+            hx-get="/feed/content" hx-target="#feed-content" hx-swap="innerHTML"
+            hx-vals='js:{"event_type": {{ event_type|tojson }}, "favorites_only": event.target.checked, "q": {{ search|tojson }}}'
+            {% if favorites_only %}checked{% endif %}>
+        お気に入りのみ
+    </label>
+    <input type="search" placeholder="フレンド名で検索..." value="{{ search }}" class="feed-search-input"
+        hx-get="/feed/content" hx-target="#feed-content" hx-swap="innerHTML"
+        hx-trigger="keyup changed delay:400ms, search"
+        hx-vals='js:{"event_type": {{ event_type|tojson }}, "favorites_only": {{ favorites_only|tojson }}, "q": event.target.value}'>
+</div>
+
+<div class="feed-table-wrap">
+    <table class="feed-table">
+        <thead>
+            <tr>
+                <th class="feed-th-date">日付</th>
+                <th>種類</th>
+                <th>ユーザー</th>
+                <th>詳細</th>
+            </tr>
+        </thead>
+        <tbody id="feed-tbody">
+            {% include "feed/_rows.html" %}
+        </tbody>
+    </table>
+</div>

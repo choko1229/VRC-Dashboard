@@ -1,0 +1,60 @@
+{% for entry in entries %}
+{% set friend = entry.friend %}
+{% set event = entry.event %}
+<tr class="feed-row">
+    <td class="feed-cell-date">{{ event.occurred_at.strftime("%m/%d %H:%M") }}</td>
+    <td>
+        <span class="feed-type-badge feed-type-{{ event.event_type }}">
+            {% if event.event_type == "location_change" %}現在地
+            {%- elif event.event_type == "online" %}オンライン
+            {%- elif event.event_type == "offline" %}オフライン
+            {%- elif event.event_type == "status_change" %}ステータス
+            {%- elif event.event_type == "avatar_change" %}アバター
+            {%- endif %}
+        </span>
+    </td>
+    <td class="feed-cell-user">
+        {% if friend.current_avatar_thumbnail_url %}
+        <img src="{{ friend.current_avatar_thumbnail_url }}" class="feed-user-thumb" alt="">
+        {% else %}
+        <span class="feed-user-thumb feed-user-thumb-placeholder"></span>
+        {% endif %}
+        {{ friend.display_name }}
+    </td>
+    <td class="feed-cell-detail">
+        {% if event.event_type in ("location_change", "online") %}
+            {% if event.world_name %}
+            <span class="feed-detail-flag">{{ instance_region_flag(event.location) }}</span>
+            <span>{{ event.world_name }}・{{ instance_privacy_label(event.location) }}</span>
+            {% else %}
+            <span class="text-muted">プライベート</span>
+            {% endif %}
+        {% elif event.event_type == "offline" %}
+            <span class="text-muted">プライベート</span>
+        {% elif event.event_type == "status_change" %}
+            <span class="status-dot status-{{ status_dot_class(event.previous_status or 'offline') }}"></span>
+            <span class="feed-status-arrow">→</span>
+            <span class="status-dot status-{{ status_dot_class(event.status or 'offline') }}"></span>
+        {% elif event.event_type == "avatar_change" %}
+            {% if friend.current_avatar_thumbnail_url %}
+            <img src="{{ friend.current_avatar_thumbnail_url }}" class="feed-avatar-change-thumb" alt="">
+            {% endif %}
+            <span class="text-muted">アバターを変更しました</span>
+        {% endif %}
+    </td>
+</tr>
+{% endfor %}
+{% if has_more %}
+<tr class="feed-load-more-row">
+    <td colspan="4">
+        <button type="button" class="btn btn-ghost"
+            hx-get="/feed/rows"
+            hx-vals='{"event_type": {{ event_type|tojson }}, "favorites_only": {{ favorites_only|tojson }}, "q": {{ search|tojson }}, "page": {{ next_page }}}'
+            hx-target="closest tr" hx-swap="outerHTML">もっと見る</button>
+    </td>
+</tr>
+{% elif not entries %}
+<tr>
+    <td colspan="4" class="placeholder">イベントがありません。</td>
+</tr>
+{% endif %}

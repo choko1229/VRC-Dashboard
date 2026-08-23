@@ -33,6 +33,13 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
     - **JSON**: 保存済み情報とVRChatから取得したフルプロフィールの生データ。
     - 「共通のフレンド」「お気に入りワールド」「アバター」はVRChat APIで他ユーザーの
       当該データを取得する手段が無い（またはプライバシー上非公開）ため非対応。
+- **フィード**（`/feed`）: 全フレンド横断の活動履歴を時系列一覧表示するVRCXの「フィード」
+  タブに近い機能。「現在地／オンライン／オフライン／ステータス／アバター」の種別タブ、
+  お気に入りのみ表示、フレンド名検索、「もっと見る」による追加読み込みに対応する。
+  ステータス変化は変化前後を色付きドットの遷移で表示し、アバター変更は`friend-update`
+  イベントでの`currentAvatarThumbnailImageUrl`の差分検知により記録する
+  （`friend_presence_event.event_type`に`status_change`/`avatar_change`を追加）。
+  「自己紹介」の変更検知はVRChat APIから継続的に低コストで取得する手段が無いため非対応。
 - **ゲームログ**（`/game-log`）: VRChatを起動しているPC上で動く別プロセスの
   「VRCダッシュボード連携ツール」（`desktop_agent/`、タスクトレイ常駐・自動更新対応の
   Windows exe）がVRChatクライアントのログファイルを解析し、訪問したインスタンスごとに
@@ -132,7 +139,7 @@ app/
 ├── db/                 # DBセッション・Base
 ├── models/             # SQLAlchemyモデル（1テーブル1ファイル）
 ├── schemas/             # pydanticスキーマ
-├── routers/            # auth / dashboard / friends / avatars / schedule / settings / setup / webpush
+├── routers/            # auth / dashboard / friends / feed / game_log / avatars / schedule / settings / setup / webpush
 ├── services/           # VRChatクライアント・Pipeline・各種業務ロジック
 ├── notifications/       # Discord通知・Web Push通知の抽象化
 ├── templates/           # Jinja2テンプレート
@@ -186,3 +193,9 @@ tests/                  # unit / integration
   これはOpenSSL 3.x系の厳格な検証とサイト側の証明書チェーンの組み合わせによる既知の相性問題で、
   Windows標準のTLS検証（curl等が使うもの）では発生しない。`truststore`パッケージでOSの
   ネイティブ証明書検証に差し替えることで回避している（`desktop_agent/main.py`参照）。
+- フィードのステータス/アバター変更検知（`friends_service.handle_friend_status_update`）は、
+  フレンドを初めて観測した際（`current_avatar_thumbnail_url`が未取得からの初回取得）は
+  「変更」とみなさない（Noneから実URLへの遷移は毎回の初回同期で必ず起きるため、
+  記録すると全フレンドについて意味の無い「アバター変更」イベントが大量発生してしまう）。
+  ステータスの変化前後（例: 取り込み中/退席中→オンライン）は`previous_status`列に保存し、
+  フィード側で色付きドット→色付きドットの遷移として表示する。

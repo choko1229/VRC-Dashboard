@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}フィード{% endblock %}
+{% block content %}
+<h1 class="app-heading">フィード</h1>
+<p class="text-muted">
+    フレンド全員のオンライン化・ワールド移動・ステータス変化・アバター変更を時系列で表示します。
+</p>
+
+<div id="feed-content">
+    {% include "feed/_content.html" %}
+</div>
+{% endblock %}

@@ -379,13 +379,37 @@ async def handle_friend_location_change(
 
 
 async def handle_friend_status_update(db: AsyncSession, *, vrchat_user: VRChatUser) -> None:
-    """statusDescription/表示名/サムネイル等、状態変化を伴わない属性更新。"""
+    """statusDescription/表示名/サムネイル等の属性更新。ステータス・アバターの変化はフィード用に記録する。"""
     friend = await _get_or_create_friend(db, vrchat_user.id, vrchat_user.display_name)
+    previous_status = friend.activity_status
+    previous_avatar_url = friend.current_avatar_thumbnail_url
+    now = datetime.now(UTC)
+
     friend.display_name = vrchat_user.display_name
     friend.activity_status = vrchat_user.status
     friend.status_message = vrchat_user.status_description
     friend.current_avatar_thumbnail_url = vrchat_user.current_avatar_thumbnail_image_url
-    friend.last_updated_at = datetime.now(UTC)
+    friend.last_updated_at = now
+
+    if previous_status != vrchat_user.status:
+        db.add(
+            FriendPresenceEvent(
+                friend_id=friend.id,
+                event_type="status_change",
+                status=vrchat_user.status,
+                previous_status=previous_status,
+                occurred_at=now,
+            )
+        )
+    # avatar_thumbnail_urlが未取得(None)から初めて取得できた場合は「変更」ではないため記録しない。
+    if (
+        previous_avatar_url is not None
+        and previous_avatar_url != vrchat_user.current_avatar_thumbnail_image_url
+    ):
+        db.add(
+            FriendPresenceEvent(friend_id=friend.id, event_type="avatar_change", occurred_at=now)
+        )
+
     await db.commit()
 
 

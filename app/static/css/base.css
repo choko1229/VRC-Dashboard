@@ -1159,3 +1159,142 @@ body {
 .gamelog-load-more {
     align-self: center;
 }
+
+/* フィードページ */
+.feed-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    margin: var(--space-4) 0;
+}
+
+.feed-type-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+
+.feed-tab {
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    color: var(--color-text-muted);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-pill);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.feed-tab:hover {
+    border-color: var(--color-friends-border);
+}
+
+.feed-tab.active {
+    background-color: var(--color-friends-primary);
+    border-color: var(--color-friends-primary);
+    color: #fff;
+    font-weight: 700;
+}
+
+.feed-favorites-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.feed-search-input {
+    margin-left: auto;
+    min-width: 200px;
+}
+
+.feed-table-wrap {
+    overflow-x: auto;
+}
+
+.feed-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+}
+
+.feed-table th {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+}
+
+.feed-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+}
+
+.feed-row:hover {
+    background-color: var(--color-friends-bg-soft);
+}
+
+.feed-cell-date {
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.feed-type-badge {
+    display: inline-block;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-pill);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+    background-color: var(--color-friends-bg-soft);
+    color: var(--color-friends-hover);
+}
+
+.feed-cell-user {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    white-space: nowrap;
+    font-weight: 700;
+}
+
+.feed-user-thumb {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-pill);
+    object-fit: cover;
+}
+
+.feed-user-thumb-placeholder {
+    background-color: var(--color-border);
+}
+
+.feed-cell-detail {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-text);
+}
+
+.feed-detail-flag {
+    font-size: var(--text-base);
+}
+
+.feed-status-arrow {
+    color: var(--color-text-muted);
+}
+
+.feed-avatar-change-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+}
+
+.feed-load-more-row td {
+    text-align: center;
+}

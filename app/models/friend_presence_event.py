@@ -24,9 +24,11 @@ class FriendPresenceEvent(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     friend_id: Mapped[int] = mapped_column(ForeignKey("friend.id", ondelete="CASCADE"))
-    # online / offline / location_change / status_change
+    # online / offline / location_change / status_change / avatar_change
     event_type: Mapped[str] = mapped_column(String(20))
     status: Mapped[str | None] = mapped_column(String(20), default=None)
+    # status_changeイベントのみ使用（変化前のstatus。フィードでの「busy→active」等の表示に使う）。
+    previous_status: Mapped[str | None] = mapped_column(String(20), default=None)
     world_id: Mapped[str | None] = mapped_column(String(100), default=None)
     world_name: Mapped[str | None] = mapped_column(String(255), default=None)
     location: Mapped[str | None] = mapped_column(String(150), default=None)
