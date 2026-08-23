@@ -98,8 +98,20 @@ async def _fetch_friend_group_ids(db: AsyncSession, friend_id: int) -> set[int]:
 @router.get("", response_class=HTMLResponse)
 async def friends_page(
     request: Request,
+    view: str = "card",
+    sort_by: str = "display_name",
+    sort_dir: str = "asc",
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
+    if view == "table":
+        rows = await friends_service.get_friend_table_rows(
+            db, sort_by=sort_by, sort_dir=sort_dir
+        )
+        return templates.TemplateResponse(
+            request,
+            "friends/table.html",
+            {"rows": rows, "sort_by": sort_by, "sort_dir": sort_dir},
+        )
     sections = await _fetch_friend_sections(db)
     return templates.TemplateResponse(request, "friends/list.html", {"sections": sections})
 

@@ -28,6 +28,8 @@ async def full_friends_sync(db: AsyncSession, client: VRChatClient) -> None:
         groups = await client.get_favorite_friend_groups()
         favorites = await client.get_favorite_friends()
         await friends_service.sync_favorite_groups(db, groups=groups, favorites=favorites)
+
+        await friends_service.sync_friend_profile_details(db, client)
     except VRChatAPIError as exc:
         logger.warning("フレンド同期に失敗しました: %s", exc)
         await sync_cursor_service.mark_synced(

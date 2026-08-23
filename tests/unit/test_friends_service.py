@@ -13,6 +13,7 @@ from app.models.friend_notification_pref import FriendNotificationPref
 from app.models.friend_presence_event import FriendPresenceEvent
 from app.schemas.vrchat import VRChatFavorite, VRChatFavoriteGroup, VRChatUser
 from app.services import friends_service
+from app.services.vrchat.client import VRChatAPIError
 from tests.fakes import FakeNotificationSender
 
 _TEST_FERNET_KEY = "gdsF_NX-iLtl8QLOwmQyFeEdQtOmWXiAlHD4kTrLuh4="
@@ -456,3 +457,84 @@ def test_group_online_friends_by_instance_single_member_not_grouped() -> None:
 
     assert groups == []
     assert unknown == [friend]
+
+
+class _FakeProfileClient:
+    """sync_friend_profile_detailsのテスト用フェイク。vrchat_user_id別に応答を出し分ける。"""
+
+    def __init__(self, profiles: dict[str, VRChatUser | Exception]) -> None:
+        self._profiles = profiles
+
+    async def get_user(self, vrchat_user_id: str) -> VRChatUser:
+        result = self._profiles[vrchat_user_id]
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+
+async def test_sync_friend_profile_details_stores_rank_language_bio_links_and_join_date(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        db.add(Friend(vrchat_user_id="usr_a", display_name="A"))
+        await db.commit()
+
+        profile = VRChatUser.model_validate(
+            {
+                "id": "usr_a",
+                "displayName": "A",
+                "tags": ["system_trust_known", "language_jpn", "language_eng"],
+                "bioLinks": ["https://example.com/a", "https://example.com/b"],
+                "dateJoined": "2020-01-01",
+            }
+        )
+        client = _FakeProfileClient({"usr_a": profile})
+
+        await friends_service.sync_friend_profile_details(db, client)  # type: ignore[arg-type]
+
+        friend = (
+            await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_a"))
+        ).scalar_one()
+        assert friend.trust_rank == "User"
+        assert friend.languages == "日本語,English"
+        assert friend.bio_links == "https://example.com/a,https://example.com/b"
+        assert friend.date_joined == "2020-01-01"
+
+
+async def test_sync_friend_profile_details_skips_friend_on_api_error(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        friend = Friend(vrchat_user_id="usr_b", display_name="B", trust_rank="User")
+        db.add(friend)
+        await db.commit()
+
+        client = _FakeProfileClient({"usr_b": VRChatAPIError("boom")})
+
+        await friends_service.sync_friend_profile_details(db, client)  # type: ignore[arg-type]
+
+        refreshed = (
+            await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_b"))
+        ).scalar_one()
+        # 取得失敗時は既存の値を保持する。
+        assert refreshed.trust_rank == "User"
+
+
+async def test_get_friend_table_rows_sorts_by_requested_column(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        db.add(Friend(vrchat_user_id="usr_z", display_name="Zeta"))
+        db.add(Friend(vrchat_user_id="usr_a", display_name="Alpha"))
+        await db.commit()
+
+        rows_asc = await friends_service.get_friend_table_rows(
+            db, sort_by="display_name", sort_dir="asc"
+        )
+        rows_desc = await friends_service.get_friend_table_rows(
+            db, sort_by="display_name", sort_dir="desc"
+        )
+
+        assert [r.friend.display_name for r in rows_asc] == ["Alpha", "Zeta"]
+        assert [r.friend.display_name for r in rows_desc] == ["Zeta", "Alpha"]
+        assert all(r.join_count == 0 for r in rows_asc)

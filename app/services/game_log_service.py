@@ -10,7 +10,8 @@ VRChat公式APIには「訪問したインスタンスの入退室履歴」「�
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
@@ -23,6 +24,85 @@ from app.schemas.game_log import GameLogEventIn
 logger = logging.getLogger(__name__)
 
 _PAGE_SIZE = 20
+
+
+def _aware(value: datetime) -> datetime:
+    """SQLiteから読み出したnaive datetimeをUTC awareとして扱う（書き込み時と同じUTCのため）。"""
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+@dataclass
+class CoPresenceStats:
+    join_count: int
+    together_seconds: float
+
+
+@dataclass
+class _InstanceVisit:
+    my_joined_at: datetime
+    my_left_at: datetime | None
+    friend_joins: list[datetime] = field(default_factory=list)
+    friend_leaves: list[datetime] = field(default_factory=list)
+
+
+async def get_friend_co_presence_stats(
+    db: AsyncSession, vrchat_user_ids: list[str]
+) -> dict[str, CoPresenceStats]:
+    """フレンドごとの「一緒に居たインスタンス数」「一緒に居た合計時間」をゲームログから概算する。
+
+    自分自身の滞在期間（game_log_instance.joined_at〜left_at）と、そのインスタンス内で
+    観測された当該フレンドのplayer_join〜player_leaveの期間を突き合わせて重なりを計算する。
+    デスクトップエージェントが稼働していた期間のログしか無いため、あくまで概算
+    （複数回の再入室は、最初のjoinから最後のleaveまでを1回の滞在とみなして単純化している）。
+    """
+    if not vrchat_user_ids:
+        return {}
+
+    rows = (
+        await db.execute(
+            select(
+                GameLogEvent.instance_id,
+                GameLogEvent.player_vrchat_user_id,
+                GameLogEvent.event_type,
+                GameLogEvent.occurred_at,
+                GameLogInstance.joined_at,
+                GameLogInstance.left_at,
+            )
+            .join(GameLogInstance, GameLogEvent.instance_id == GameLogInstance.id)
+            .where(
+                GameLogEvent.player_vrchat_user_id.in_(vrchat_user_ids),
+                GameLogEvent.event_type.in_(("player_join", "player_leave")),
+            )
+        )
+    ).all()
+
+    # (instance_id, user_id) -> 自分の滞在期間 + そのフレンドのjoin/leave時刻一覧
+    visits: dict[tuple[int, str], _InstanceVisit] = {}
+    for instance_id, user_id, event_type, occurred_at, my_joined_at, my_left_at in rows:
+        key = (instance_id, user_id)
+        visit = visits.setdefault(
+            key, _InstanceVisit(my_joined_at=my_joined_at, my_left_at=my_left_at)
+        )
+        target = visit.friend_joins if event_type == "player_join" else visit.friend_leaves
+        target.append(occurred_at)
+
+    now = datetime.now(UTC)
+    stats: dict[str, CoPresenceStats] = defaultdict(lambda: CoPresenceStats(0, 0.0))
+    for (_instance_id, user_id), visit in visits.items():
+        if not visit.friend_joins:
+            continue
+
+        my_end = _aware(visit.my_left_at or now)
+        start = max(_aware(min(visit.friend_joins)), _aware(visit.my_joined_at))
+        friend_end = _aware(max(visit.friend_leaves)) if visit.friend_leaves else my_end
+        end = min(friend_end, my_end)
+
+        stat = stats[user_id]
+        stat.join_count += 1
+        if end > start:
+            stat.together_seconds += (end - start).total_seconds()
+
+    return dict(stats)
 
 
 @dataclass
@@ -92,15 +172,19 @@ async def ingest_events(db: AsyncSession, events: list[GameLogEventIn]) -> None:
     await db.commit()
 
 
-def _format_duration(joined_at: datetime, left_at: datetime | None) -> str:
-    end = left_at or datetime.now(UTC)
-    joined_aware = joined_at if joined_at.tzinfo is not None else joined_at.replace(tzinfo=UTC)
-    end_aware = end if end.tzinfo is not None else end.replace(tzinfo=UTC)
-    total_minutes = max(0, int((end_aware - joined_aware).total_seconds() // 60))
+def format_duration_seconds(total_seconds: float) -> str:
+    total_minutes = max(0, int(total_seconds // 60))
     if total_minutes < 60:
         return f"{total_minutes}分"
     hours, minutes = divmod(total_minutes, 60)
     return f"{hours}時間{minutes}分" if minutes else f"{hours}時間"
+
+
+def _format_duration(joined_at: datetime, left_at: datetime | None) -> str:
+    end = left_at or datetime.now(UTC)
+    joined_aware = joined_at if joined_at.tzinfo is not None else joined_at.replace(tzinfo=UTC)
+    end_aware = end if end.tzinfo is not None else end.replace(tzinfo=UTC)
+    return format_duration_seconds((end_aware - joined_aware).total_seconds())
 
 
 async def get_instance_summaries(

@@ -13,6 +13,7 @@ from app.schemas.vrchat import (
     parse_instance_region_flag,
     parse_platform_label,
 )
+from app.services.game_log_service import format_duration_seconds
 from app.services.vrchat_notification_service import get_type_action, get_type_label
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -41,3 +42,4 @@ templates.env.globals["status_dot_class"] = status_dot_class
 templates.env.globals["platform_label"] = parse_platform_label
 templates.env.globals["notification_type_label"] = get_type_label
 templates.env.globals["notification_type_action"] = get_type_action
+templates.env.globals["format_duration_seconds"] = format_duration_seconds

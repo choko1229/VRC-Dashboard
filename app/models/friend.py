@@ -37,6 +37,16 @@ class Friend(Base):
     current_world_thumbnail_url: Mapped[str | None] = mapped_column(default=None)
     current_location: Mapped[str | None] = mapped_column(String(150), default=None)
     current_avatar_thumbnail_url: Mapped[str | None] = mapped_column(default=None)
+    # 以下はVRChatのフルプロフィール（GET /users/{id}）からしか取得できないため、
+    # 「VRChatと同期」の手動再同期時にフレンド一覧テーブル表示用にまとめて取得・保存する
+    # （friends_service.sync_friend_profile_details参照）。
+    trust_rank: Mapped[str | None] = mapped_column(String(30), default=None)
+    # カンマ区切り（例: "日本語,English"）。
+    languages: Mapped[str | None] = mapped_column(String(255), default=None)
+    # カンマ区切りのURL一覧。
+    bio_links: Mapped[str | None] = mapped_column(default=None)
+    # VRChatはプライバシー上、時刻を含まない日付文字列（例: "2020-01-01"）を返す。
+    date_joined: Mapped[str | None] = mapped_column(String(20), default=None)
     last_seen_online_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
     )

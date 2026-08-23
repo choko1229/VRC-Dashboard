@@ -29,9 +29,11 @@ from app.schemas.vrchat import (
     VRChatWorld,
     parse_instance_privacy_label,
     parse_instance_region_flag,
+    parse_languages,
+    parse_trust_rank,
     parse_world_id_from_location,
 )
-from app.services import app_config_service, vrchat_session_service
+from app.services import app_config_service, game_log_service, vrchat_session_service
 from app.services.vrchat.client import VRChatAPIError, VRChatClient
 
 logger = logging.getLogger(__name__)
@@ -155,6 +157,63 @@ def group_online_friends_by_instance(
     return groups, known_singles + unknown_location
 
 
+@dataclass
+class FriendTableRow:
+    """フレンド一覧のテーブル表示（VRCX風）の1行。"""
+
+    friend: Friend
+    join_count: int
+    together_seconds: float
+
+
+def _aware_or_min(value: datetime | None) -> datetime:
+    """ソート用。SQLiteから読み出したnaive datetimeをUTC awareとして扱う
+    （書き込み時と同じUTCのため）。Noneは最小値扱いにする。
+    """
+    if value is None:
+        return datetime.min.replace(tzinfo=UTC)
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+_TABLE_SORT_KEYS: dict[str, object] = {
+    "display_name": lambda row: row.friend.display_name,
+    "trust_rank": lambda row: row.friend.trust_rank or "",
+    "status": lambda row: row.friend.activity_status,
+    "languages": lambda row: row.friend.languages or "",
+    "join_count": lambda row: row.join_count,
+    "together_seconds": lambda row: row.together_seconds,
+    "last_seen_online_at": lambda row: _aware_or_min(row.friend.last_seen_online_at),
+    "last_updated_at": lambda row: _aware_or_min(row.friend.last_updated_at),
+    "date_joined": lambda row: row.friend.date_joined or "",
+}
+
+
+async def get_friend_table_rows(
+    db: AsyncSession, *, sort_by: str = "display_name", sort_dir: str = "asc"
+) -> list[FriendTableRow]:
+    """フレンド一覧のテーブル表示（VRCX風）用に、全フレンドと集計値をまとめて返す。"""
+    friends = list((await db.execute(select(Friend).order_by(Friend.display_name))).scalars().all())
+    co_presence = await game_log_service.get_friend_co_presence_stats(
+        db, [f.vrchat_user_id for f in friends]
+    )
+
+    _empty_stats = game_log_service.CoPresenceStats(0, 0.0)
+    rows = [
+        FriendTableRow(
+            friend=friend,
+            join_count=co_presence.get(friend.vrchat_user_id, _empty_stats).join_count,
+            together_seconds=co_presence.get(
+                friend.vrchat_user_id, _empty_stats
+            ).together_seconds,
+        )
+        for friend in friends
+    ]
+
+    key_func = _TABLE_SORT_KEYS.get(sort_by, _TABLE_SORT_KEYS["display_name"])
+    rows.sort(key=key_func, reverse=(sort_dir == "desc"))  # type: ignore[arg-type]
+    return rows
+
+
 async def _get_or_create_friend(db: AsyncSession, vrchat_user_id: str, display_name: str) -> Friend:
     result = await db.execute(select(Friend).where(Friend.vrchat_user_id == vrchat_user_id))
     friend = result.scalar_one_or_none()
@@ -240,6 +299,31 @@ async def bootstrap_friends_from_vrchat(
         len(online_friends),
         len(offline_friends),
     )
+
+
+async def sync_friend_profile_details(db: AsyncSession, client: VRChatClient) -> None:
+    """フレンド一覧のテーブル表示用に、ランク/言語/自己紹介リンク/参加日時をまとめて取得する。
+
+    これらはVRChatのフルプロフィール（GET /users/{id}）でしか取得できない
+    （フレンド一覧APIの簡易オブジェクトには含まれない）ため、フレンド1人につき1リクエストが
+    必要になる。フレンド数が多いと数十秒規模の処理時間になるため、「VRChatと同期」の
+    手動再同期時にのみ実行する。取得に失敗したフレンドはスキップし、既存の値を保持したまま
+    処理を続ける。
+    """
+    friends = list((await db.execute(select(Friend))).scalars().all())
+    for friend in friends:
+        try:
+            profile = await client.get_user(friend.vrchat_user_id)
+        except VRChatAPIError:
+            logger.warning("プロフィール詳細の取得に失敗しました: %s", friend.vrchat_user_id)
+            continue
+        friend.trust_rank = parse_trust_rank(profile.tags)
+        languages = parse_languages(profile.tags)
+        friend.languages = ",".join(languages) if languages else None
+        friend.bio_links = ",".join(profile.bio_links) if profile.bio_links else None
+        friend.date_joined = profile.date_joined
+    await db.commit()
+    logger.info("フレンドのプロフィール詳細を同期しました (%d件)", len(friends))
 
 
 async def sync_favorite_groups(

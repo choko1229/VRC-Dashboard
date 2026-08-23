@@ -50,6 +50,8 @@ class VRChatUser(BaseModel):
     user_icon: str | None = Field(default=None, alias="userIcon")
     # 自分がそのユーザーに付けているメモ（認証済みリクエストの場合のみ返る）。
     note: str | None = None
+    # プロフィールに設定した外部リンク（Twitter/Discord等）。
+    bio_links: list[str] = Field(default_factory=list, alias="bioLinks")
 
 
 class VRChatFavoriteGroup(BaseModel):
@@ -221,6 +223,32 @@ def parse_trust_rank(tags: list[str]) -> str:
         if tag in tags:
             return rank
     return "Visitor"
+
+
+# tagsに含まれる"language_*"から話す言語を判定する（コミュニティ整備の慣例。
+# 公式に明文化された仕様ではないため、VRChat側の変更で外れる可能性がある）。
+_LANGUAGE_LABEL_BY_TAG: dict[str, str] = {
+    "language_jpn": "日本語",
+    "language_eng": "English",
+    "language_kor": "한국어",
+    "language_zho": "中文",
+    "language_fra": "Français",
+    "language_deu": "Deutsch",
+    "language_spa": "Español",
+    "language_por": "Português",
+    "language_rus": "Русский",
+    "language_ita": "Italiano",
+}
+
+
+def parse_languages(tags: list[str]) -> list[str]:
+    """フレンドが話す言語一覧を推定する（未知のタグは"language_"を除いた生の値を使う）。"""
+    languages: list[str] = []
+    for tag in tags:
+        if not tag.startswith("language_"):
+            continue
+        languages.append(_LANGUAGE_LABEL_BY_TAG.get(tag, tag.removeprefix("language_")))
+    return languages
 
 
 def resolve_profile_image_url(user: VRChatUser) -> str | None:

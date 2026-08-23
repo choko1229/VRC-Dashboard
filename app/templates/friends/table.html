@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}フレンド一覧{% endblock %}
+{% block content %}
+{% macro sort_header(column, label) %}
+{% set is_current = sort_by == column %}
+{% set next_dir = "desc" if is_current and sort_dir == "asc" else "asc" %}
+<a href="/friends?view=table&sort_by={{ column }}&sort_dir={{ next_dir }}" class="friend-table-sort-link">
+    {{ label }}
+    <span class="friend-table-sort-arrow">{% if is_current %}{{ "↓" if sort_dir == "desc" else "↑" }}{% else %}⇅{% endif %}</span>
+</a>
+{% endmacro %}
+
+<div class="friends-page-header">
+    <h1 class="app-heading">フレンド一覧</h1>
+    <div class="friends-page-header-actions">
+        <a href="/friends" class="btn btn-ghost btn-sm">カード表示</a>
+    </div>
+</div>
+
+<p><button class="btn btn-ghost" hx-post="/friends/sync" hx-target="#sync-result" hx-swap="innerHTML">VRChatと同期</button></p>
+<div id="sync-result"></div>
+
+{% if not rows %}
+<p class="placeholder">フレンドがいません。「VRChatと同期」を試してください。</p>
+{% else %}
+<div class="friend-table-wrap">
+    <table class="friend-table">
+        <thead>
+            <tr>
+                <th>{{ sort_header("display_name", "表示名") }}</th>
+                <th>{{ sort_header("trust_rank", "ランク") }}</th>
+                <th>{{ sort_header("status", "ステータス") }}</th>
+                <th>{{ sort_header("languages", "言語") }}</th>
+                <th>自己紹介リンク</th>
+                <th>{{ sort_header("join_count", "Joinした回数") }}</th>
+                <th>{{ sort_header("together_seconds", "一緒に居た時間") }}</th>
+                <th>{{ sort_header("last_seen_online_at", "最後に見た日時") }}</th>
+                <th>{{ sort_header("last_updated_at", "最後に活動した時間") }}</th>
+                <th>{{ sort_header("date_joined", "参加日時") }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            {% set friend = row.friend %}
+            <tr class="friend-table-row">
+                <td class="friend-table-cell-name">
+                    <a href="/friends/{{ friend.id }}"
+                        hx-get="/friends/{{ friend.id }}/modal"
+                        hx-target="#friend-modal-body" hx-swap="innerHTML">
+                        <span class="status-dot status-{{ status_dot_class(friend.activity_status) }}"></span>
+                        {{ friend.display_name }}
+                    </a>
+                </td>
+                <td>{{ friend.trust_rank or "-" }}</td>
+                <td>{{ friend.activity_status }}</td>
+                <td>{{ friend.languages.replace(",", "、") if friend.languages else "-" }}</td>
+                <td class="friend-table-cell-links">
+                    {% if friend.bio_links %}
+                        {% for link in friend.bio_links.split(",") %}
+                        <a href="{{ link }}" target="_blank" rel="noopener noreferrer">リンク{{ loop.index if loop.length > 1 }}</a>
+                        {% endfor %}
+                    {% else %}-{% endif %}
+                </td>
+                <td>{{ row.join_count }}</td>
+                <td>{{ format_duration_seconds(row.together_seconds) if row.together_seconds > 0 else "-" }}</td>
+                <td>{{ friend.last_seen_online_at.strftime("%Y-%m-%d %H:%M") if friend.last_seen_online_at else "-" }}</td>
+                <td>{{ friend.last_updated_at.strftime("%Y-%m-%d %H:%M") if friend.last_updated_at else "-" }}</td>
+                <td>{{ friend.date_joined or "-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div id="friend-modal" class="modal-overlay">
+    <div class="modal-dialog">
+        <button type="button" class="modal-close-btn" onclick="window.closeFriendModal()" aria-label="閉じる">✕</button>
+        <div id="friend-modal-body"></div>
+    </div>
+</div>
+<script src="/static/js/friend-modal.js" defer></script>
+<script src="/static/js/friend-detail-tabs.js" defer></script>
+{% endblock %}

@@ -188,3 +188,75 @@ async def test_get_instance_events_orders_newest_first(
 
         events = await game_log_service.get_instance_events(db, instance.id)
         assert [e.player_name for e in events] == ["Second", "First"]
+
+
+def test_format_duration_seconds() -> None:
+    assert game_log_service.format_duration_seconds(0) == "0分"
+    assert game_log_service.format_duration_seconds(59 * 60) == "59分"
+    assert game_log_service.format_duration_seconds(60 * 60) == "1時間"
+    assert game_log_service.format_duration_seconds(90 * 60) == "1時間30分"
+
+
+async def test_get_friend_co_presence_stats_computes_overlap(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        instance = GameLogInstance(
+            location="wrld_a:1", joined_at=_dt(0), left_at=_dt(59)
+        )
+        db.add(instance)
+        await db.flush()
+        db.add_all(
+            [
+                GameLogEvent(
+                    instance_id=instance.id,
+                    event_type="player_join",
+                    occurred_at=_dt(10),
+                    player_vrchat_user_id="usr_friend",
+                ),
+                GameLogEvent(
+                    instance_id=instance.id,
+                    event_type="player_leave",
+                    occurred_at=_dt(40),
+                    player_vrchat_user_id="usr_friend",
+                ),
+            ]
+        )
+        await db.commit()
+
+        stats = await game_log_service.get_friend_co_presence_stats(db, ["usr_friend"])
+
+        assert stats["usr_friend"].join_count == 1
+        assert stats["usr_friend"].together_seconds == 30 * 60
+
+
+async def test_get_friend_co_presence_stats_no_leave_uses_my_left_at(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        instance = GameLogInstance(
+            location="wrld_b:1", joined_at=_dt(0), left_at=_dt(20)
+        )
+        db.add(instance)
+        await db.flush()
+        db.add(
+            GameLogEvent(
+                instance_id=instance.id,
+                event_type="player_join",
+                occurred_at=_dt(5),
+                player_vrchat_user_id="usr_friend2",
+            )
+        )
+        await db.commit()
+
+        stats = await game_log_service.get_friend_co_presence_stats(db, ["usr_friend2"])
+
+        assert stats["usr_friend2"].join_count == 1
+        assert stats["usr_friend2"].together_seconds == 15 * 60
+
+
+async def test_get_friend_co_presence_stats_empty_ids_returns_empty(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        assert await game_log_service.get_friend_co_presence_stats(db, []) == {}
