@@ -2,7 +2,7 @@
 {% set friend = entry.friend %}
 {% set event = entry.event %}
 <tr class="feed-row">
-    <td class="feed-cell-date">{{ event.occurred_at.strftime("%m/%d %H:%M") }}</td>
+    <td class="feed-cell-date">{{ event.occurred_at|jst("%m/%d %H:%M") }}</td>
     <td>
         <span class="feed-type-badge feed-type-{{ event.event_type }}">
             {% if event.event_type == "location_change" %}現在地

@@ -14,9 +14,9 @@
     {% if live_profile and live_profile.date_joined %}
     <div><dt>アカウント作成日</dt><dd>{{ live_profile.date_joined }}</dd></div>
     {% endif %}
-    <div><dt>ダッシュボードで初めて確認した日</dt><dd>{{ friend.created_at }}</dd></div>
+    <div><dt>ダッシュボードで初めて確認した日</dt><dd>{{ friend.created_at|jst("%Y-%m-%d %H:%M") }}</dd></div>
     {% if friend.last_seen_online_at %}
-    <div><dt>最後にオンラインを確認した日時</dt><dd>{{ friend.last_seen_online_at }}</dd></div>
+    <div><dt>最後にオンラインを確認した日時</dt><dd>{{ friend.last_seen_online_at|jst("%Y-%m-%d %H:%M") }}</dd></div>
     {% endif %}
     <div><dt>オンライン確認回数</dt><dd>{{ online_event_count }}回</dd></div>
     {% if live_profile and platform_label(live_profile.last_platform) %}
@@ -43,7 +43,7 @@
 <h2>状態履歴（直近{{ events|length }}件）</h2>
 <ul class="history-list">
     {% for event in events %}
-    <li>{{ event.occurred_at }} - {{ event.event_type }}{% if event.world_name %} ({{ event.world_name }}){% endif %}</li>
+    <li>{{ event.occurred_at|jst("%Y-%m-%d %H:%M") }} - {{ event.event_type }}{% if event.world_name %} ({{ event.world_name }}){% endif %}</li>
     {% else %}
     <li class="placeholder">履歴がありません。</li>
     {% endfor %}

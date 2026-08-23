@@ -5,7 +5,7 @@
 <ul class="gamelog-event-list">
     {% for event in events %}
     <li class="gamelog-event-row">
-        <span class="gamelog-event-time">{{ event.occurred_at.strftime("%m/%d %H:%M") }}</span>
+        <span class="gamelog-event-time">{{ event.occurred_at|jst("%m/%d %H:%M") }}</span>
         {% if event.event_type == "player_join" %}
         <span class="gamelog-event-tag gamelog-event-tag-join">{{ icon_player_join() }}プレイヤー参加</span>
         <span class="gamelog-event-detail">{{ event.player_name or "不明なユーザー" }}</span>

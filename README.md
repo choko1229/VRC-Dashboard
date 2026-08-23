@@ -201,6 +201,11 @@ tests/                  # unit / integration
 ## 補足
 
 - フォントは全て「LINE Seed JP」（Th/Rg/Bd/Eb）に統一している。
+- 日時系のDBカラムは全てUTCで保存する（`datetime.now(UTC)`。SQLiteは読み出し時にtzinfoを
+  落とすため、書き込み時と同じUTCとして扱う必要がある——本アプリで繰り返し出てくる注意点）。
+  画面表示は日本時間の利用者を想定しているため、テンプレート側で生の`.strftime()`を呼ぶと
+  UTCのまま表示されてしまう不具合になる。必ず`app.core.templating`の`jst`フィルタ
+  （`{{ value|jst("%Y-%m-%d %H:%M") }}`、Noneは"-"を返す）を経由してJSTに変換すること。
 - VRChatの認証情報・Discord OAuthシークレット・VAPID秘密鍵はFernetで暗号化してDBに保存する
   （暗号鍵は `FERNET_MASTER_KEY` 未設定時 `data/fernet.key` に自動生成・永続化される）。
 - フレンド一覧／サイドバーの「オンライン」区分は、各フレンドの`current_location`を突き合わせて

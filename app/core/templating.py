@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
@@ -18,6 +20,20 @@ from app.services.vrchat_notification_service import get_type_action, get_type_l
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+_JST = ZoneInfo("Asia/Tokyo")
+
+
+def format_jst(value: datetime | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+    """DB保存済みのdatetime（UTC、SQLiteからの読み出し時はtzinfo無し）をJSTに変換して表示する。
+
+    テンプレート側で`.strftime()`を直に呼ぶとUTCのまま表示されてしまう
+    （本アプリの利用者は日本時間を想定しているため要変換）。Noneの場合は"-"を返す。
+    """
+    if value is None:
+        return "-"
+    aware = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    return aware.astimezone(_JST).strftime(fmt)
 
 
 def current_dashboard_user(request: Request) -> DashboardUser | None:
@@ -43,3 +59,4 @@ templates.env.globals["platform_label"] = parse_platform_label
 templates.env.globals["notification_type_label"] = get_type_label
 templates.env.globals["notification_type_action"] = get_type_action
 templates.env.globals["format_duration_seconds"] = format_duration_seconds
+templates.env.filters["jst"] = format_jst

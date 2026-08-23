@@ -2,7 +2,7 @@
 {% macro notification_row(entry) %}
 {% set action = notification_type_action(entry.notification_type) %}
 <tr class="notification-row" id="notification-row-{{ entry.id }}">
-    <td class="notification-cell-date">{{ entry.occurred_at.strftime("%m/%d %H:%M") }}</td>
+    <td class="notification-cell-date">{{ entry.occurred_at|jst("%m/%d %H:%M") }}</td>
     <td>
         <span class="notification-type-badge">{{ notification_type_label(entry.notification_type) }}</span>
     </td>

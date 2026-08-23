@@ -63,8 +63,8 @@
                 </td>
                 <td>{{ row.join_count }}</td>
                 <td>{{ format_duration_seconds(row.together_seconds) if row.together_seconds > 0 else "-" }}</td>
-                <td>{{ friend.last_seen_online_at.strftime("%Y-%m-%d %H:%M") if friend.last_seen_online_at else "-" }}</td>
-                <td>{{ friend.last_updated_at.strftime("%Y-%m-%d %H:%M") if friend.last_updated_at else "-" }}</td>
+                <td>{{ friend.last_seen_online_at|jst("%Y-%m-%d %H:%M") }}</td>
+                <td>{{ friend.last_updated_at|jst("%Y-%m-%d %H:%M") }}</td>
                 <td>{{ friend.date_joined or "-" }}</td>
             </tr>
             {% endfor %}

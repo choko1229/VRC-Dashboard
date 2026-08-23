@@ -18,8 +18,8 @@
         <li>
             <span>{{ token.label or "（名称未設定）" }}</span>
             <span class="text-muted">
-                発行: {{ token.created_at.strftime("%Y/%m/%d") }}
-                {% if token.last_used_at %}・最終利用: {{ token.last_used_at.strftime("%Y/%m/%d %H:%M") }}{% else %}・未使用{% endif %}
+                発行: {{ token.created_at|jst("%Y/%m/%d") }}
+                {% if token.last_used_at %}・最終利用: {{ token.last_used_at|jst("%Y/%m/%d %H:%M") }}{% else %}・未使用{% endif %}
             </span>
             <button type="button" class="icon-btn" title="無効化" hx-delete="/game-log/agent-token/{{ token.id }}" hx-target="closest .gamelog-setup-panel" hx-swap="outerHTML" hx-confirm="このエージェントのトークンを無効化しますか？">{{ icon_trash(16) }}</button>
         </li>

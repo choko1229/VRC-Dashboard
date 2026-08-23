@@ -9,7 +9,7 @@
     <summary class="gamelog-instance-summary">
         <span class="gamelog-instance-title">{{ summary.instance.world_name or "不明なワールド" }}</span>
         <span class="gamelog-instance-meta">
-            {{ summary.instance.joined_at.strftime("%Y/%m/%d %H:%M") }}
+            {{ summary.instance.joined_at|jst("%Y/%m/%d %H:%M") }}
             ・{{ summary.duration_label }}{% if summary.instance.left_at is none %}（滞在中）{% endif %}
         </span>
         <span class="gamelog-instance-badges">
