@@ -27,6 +27,13 @@ class NotificationPayload(BaseModel):
     occurred_at: datetime
     message: str
 
+    @property
+    def link_path(self) -> str | None:
+        """ブラウザ通知クリック時の遷移先（フレンド関連の通知はフレンド詳細へ）。"""
+        if self.friend_vrchat_user_id:
+            return f"/friends/{self.friend_vrchat_user_id}"
+        return None
+
 
 class NotificationSender(Protocol):
     """通知送信手段の共通インターフェース。"""

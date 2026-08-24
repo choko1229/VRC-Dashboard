@@ -126,7 +126,20 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
 - **今日の予定**: 手動登録またはVRChatグループカレンダーからの取り込みによるスケジュール管理
   （月間/週間カレンダー表示）。
 - **通知**: ブラウザ通知（Web Push、VAPID鍵は自動生成）、および既存Discord BOTへのHTTP通知
-  （BOT側の受け口実装は本リポジトリのスコープ外）。
+  （BOT側の受け口実装は本リポジトリのスコープ外）。ブラウザ通知は`/settings/notifications`で
+  ON/OFFを切り替える。通知クリック時は関連するフレンドの詳細ページ（`/friends/{id}`）へ、
+  フレンド以外の通知（Pipeline再接続失敗等）はトップページへ遷移する
+  （`NotificationPayload.link_path`）。
+- **PWA（プログレッシブWebアプリ）**: `manifest.json`によりホーム画面への追加・スタンドアロン
+  起動に対応。Service Worker（`/sw.js`、scopeはオリジン全体`/`）がCSS/JS/フォント/アイコンを
+  Cache Storageにキャッシュし（Cache First）、オフライン時のページ遷移では
+  `app/static/offline.html`にフォールバックする。フレンドのオンライン状況等はリアルタイム性が
+  重要なため、HTML/API応答自体は意図的にキャッシュしない（常にネットワークから取得）。
+- **レスポンシブデザイン**: 左ナビは1100px未満で幅232px→変化なし、720px未満でアイコンのみの
+  幅72px（さらに480px未満で56px）に縮小する。右側の常時フレンド一覧サイドバーは1100px未満で
+  非表示になる。フレンド一覧・フィード・通知一覧などのテーブルは横スクロール対応、モーダルは
+  720px未満で画面下部からのシート表示に切り替わる。クラス未指定の`<input>`/`<select>`/
+  `<textarea>`にも共通のタッチ操作しやすいサイズ（最小高さ44px）を適用している。
 - **設定の管理方式**: `.env` にはポート番号など最小限の項目のみを置き、Discord OAuthアプリ
   情報・VRChat APIの連絡先・VAPID鍵といった外部連携設定はDB管理とし、Web UI
   （`/setup` および `/settings/general`）から入力・変更する。
@@ -205,7 +218,8 @@ app/
 ├── services/           # VRChatクライアント・Pipeline・各種業務ロジック
 ├── notifications/       # Discord通知・Web Push通知の抽象化
 ├── templates/           # Jinja2テンプレート
-└── static/              # CSS（LINE Seed JPフォントに統一）・JS・フォント
+└── static/              # CSS（LINE Seed JPフォントに統一）・JS・フォント・PWA用アイコン/
+                        #   manifest.json・オフラインフォールバックページ
 alembic/                # マイグレーション
 scripts/seed_allowlist.py  # 許可リストへの手動追加（コンソールが使える場合の代替手段）
 desktop_agent/          # 「VRCダッシュボード連携ツール」（本体アプリとは別プロセス/PCで動くWindows exe。

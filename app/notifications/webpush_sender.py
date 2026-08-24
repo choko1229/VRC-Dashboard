@@ -41,7 +41,13 @@ class WebPushSender:
         async with self._session_factory() as db:
             subscriptions = await webpush_service.list_subscriptions(db)
 
-        body = json.dumps({"title": "VRC事前確認ダッシュボード", "body": payload.message})
+        body = json.dumps(
+            {
+                "title": "VRC事前確認ダッシュボード",
+                "body": payload.message,
+                "url": payload.link_path or "/",
+            }
+        )
 
         for subscription in subscriptions:
             subscription_info = {

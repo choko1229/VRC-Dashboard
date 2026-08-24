@@ -3,13 +3,23 @@
 <html lang="ja" {% if theme_pref != "auto" %}data-theme="{{ theme_pref }}"{% endif %}>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>{% block title %}VRC事前確認ダッシュボード{% endblock %}</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#FAFAFA" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#111827" media="(prefers-color-scheme: dark)">
+    <link rel="icon" href="/static/icons/favicon.ico" sizes="any">
+    <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="VRCダッシュボード">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="stylesheet" href="/static/css/tokens.css">
     <link rel="stylesheet" href="/static/css/base.css">
     {% block extra_head %}{% endblock %}
     <script src="/static/js/htmx.min.js" defer></script>
     <script src="/static/js/theme-toggle.js" defer></script>
+    <script src="/static/js/pwa.js" defer></script>
 </head>
 <body>
     {% block body %}

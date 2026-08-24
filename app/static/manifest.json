@@ -1,0 +1,33 @@
+{
+  "name": "VRC事前確認ダッシュボード",
+  "short_name": "VRCダッシュボード",
+  "description": "VRChatにログインする前に、フレンドのオンライン状況・アバターの準備状況・今日の予定を一括で確認できるダッシュボード",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FAFAFA",
+  "theme_color": "#3B82F6",
+  "lang": "ja",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

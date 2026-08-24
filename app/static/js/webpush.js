@@ -74,8 +74,8 @@
     }
 
     if ("serviceWorker" in navigator) {
-        // scope="/" にするため、静的ファイル配信下ではなくルートパスで登録する。
-        navigator.serviceWorker.register("/sw.js", { scope: "/" }).then(refreshUI);
+        // Service Worker自体の登録はpwa.js(全ページ共通)が行う。ここでは購読状態の反映のみ。
+        refreshUI();
     } else {
         refreshUI();
     }

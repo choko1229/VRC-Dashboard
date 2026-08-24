@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>オフライン - VRC事前確認ダッシュボード</title>
+<link rel="stylesheet" href="/static/css/tokens.css">
+<style>
+    body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-body);
+        background-color: var(--color-bg, #FAFAFA);
+        color: var(--color-text, #1F2937);
+        text-align: center;
+        padding: var(--space-4, 16px);
+    }
+    .offline-box {
+        max-width: 360px;
+    }
+    .offline-icon {
+        font-size: 48px;
+        margin-bottom: var(--space-3, 12px);
+    }
+    h1 {
+        font-size: var(--text-lg, 20px);
+        margin: 0 0 var(--space-2, 8px);
+    }
+    p {
+        color: var(--color-text-muted, #6B7280);
+        font-size: var(--text-sm, 14px);
+    }
+    button {
+        margin-top: var(--space-4, 16px);
+        padding: var(--space-3, 12px) var(--space-5, 24px);
+        border-radius: var(--radius-pill, 999px);
+        border: none;
+        background-color: var(--color-friends-primary, #3B82F6);
+        color: #fff;
+        font-size: var(--text-base, 16px);
+        cursor: pointer;
+    }
+</style>
+</head>
+<body>
+<div class="offline-box">
+    <div class="offline-icon">📡</div>
+    <h1 class="app-heading">オフラインです</h1>
+    <p>インターネット接続が確認できません。接続を確認してから再度お試しください。</p>
+    <button type="button" onclick="location.reload()">再読み込み</button>
+</div>
+</body>
+</html>
