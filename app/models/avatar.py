@@ -16,12 +16,19 @@ class Avatar(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     vrchat_avatar_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(default=None)
     thumbnail_image_url: Mapped[str | None] = mapped_column(default=None)
     # VRChatが返す値をそのまま格納（例: Excellent/Good/Medium/Poor/VeryPoor）。
-    # 非公式APIのため取得できない場合はNoneのままにする。
-    performance_rank: Mapped[str | None] = mapped_column(String(20), default=None)
+    # 非公式APIのため取得できない場合はNoneのままにする。プラットフォームごとに別カラム。
+    performance_rank: Mapped[str | None] = mapped_column(String(20), default=None)  # PC
+    performance_rank_android: Mapped[str | None] = mapped_column(String(20), default=None)
+    performance_rank_ios: Mapped[str | None] = mapped_column(String(20), default=None)
     # "public" / "private"
     release_status: Mapped[str] = mapped_column(String(20), default="private")
+    version: Mapped[int | None] = mapped_column(default=None)
+    created_at_vrchat: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
     updated_at_vrchat: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
     )

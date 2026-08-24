@@ -1,0 +1,42 @@
+{% macro sort_header(column, label) %}
+{% set is_current = sort_by == column %}
+{% set next_dir = "desc" if is_current and sort_dir == "asc" else "asc" %}
+<a href="#" class="avatar-table-sort-link"
+    hx-get="/avatars/partials/list"
+    hx-vals='{"tag_id": {{ (selected_tag_id or "")|tojson }}, "release_status": {{ release_status|tojson }}, "platform": {{ platform|tojson }}, "q": {{ q|tojson }}, "sort_by": {{ column|tojson }}, "sort_dir": {{ next_dir|tojson }}}'
+    hx-target="#avatars-list" hx-swap="innerHTML">
+    {{ label }}
+    <span class="avatar-table-sort-arrow">{% if is_current %}{{ "↓" if sort_dir == "desc" else "↑" }}{% else %}⇅{% endif %}</span>
+</a>
+{% endmacro %}
+
+{% if not avatars %}
+<p class="placeholder">条件に一致するアバターがありません。</p>
+{% else %}
+<div class="avatar-table-wrap">
+    <table class="avatar-table">
+        <thead>
+            <tr>
+                <th>{{ sort_header("name", "名前") }}</th>
+                <th>タグ</th>
+                <th>プラットフォーム</th>
+                <th>{{ sort_header("release_status", "可視性") }}</th>
+                <th>過ごした時間</th>
+                <th>{{ sort_header("version", "バージョン") }}</th>
+                <th>インポスター</th>
+                <th>PCパフォーマンス</th>
+                <th>Androidパフォーマンス</th>
+                <th>iOSパフォーマンス</th>
+                <th>{{ sort_header("updated_at_vrchat", "最終更新日時") }}</th>
+                <th>{{ sort_header("created_at_vrchat", "作成日時") }}</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for avatar in avatars %}
+            {% include "avatars/_row.html" %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}

@@ -78,6 +78,16 @@ class VRChatFavorite(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
+class VRChatAvatarUnityPackage(BaseModel):
+    """アバターのプラットフォーム別ビルド情報（Unityパッケージ）。"""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    # "standalonewindows" / "android" / "ios" 等
+    platform: str | None = None
+    performance_rating: str | None = Field(default=None, alias="performanceRating")
+
+
 class VRChatAvatar(BaseModel):
     """自分がアップロード済みのアバター。
 
@@ -89,10 +99,27 @@ class VRChatAvatar(BaseModel):
 
     id: str
     name: str
+    description: str | None = None
     thumbnail_image_url: str | None = Field(default=None, alias="thumbnailImageUrl")
     release_status: str = Field(default="private", alias="releaseStatus")
     performance_rating: str | None = Field(default=None, alias="performanceRating")
+    version: int | None = None
+    unity_packages: list[VRChatAvatarUnityPackage] = Field(
+        default_factory=list, alias="unityPackages"
+    )
+    created_at: datetime | None = Field(default=None, alias="created_at")
     updated_at: datetime | None = Field(default=None, alias="updated_at")
+
+    def performance_rating_for(self, platform_prefix: str) -> str | None:
+        """指定プラットフォーム（前方一致、例: "android"）のパフォーマンスランクを返す。
+
+        同一プラットフォームに複数のUnityパッケージがある場合は最初に見つかったものを返す。
+        """
+        for package in self.unity_packages:
+            if package.platform and package.platform.lower().startswith(platform_prefix):
+                if package.performance_rating:
+                    return package.performance_rating
+        return None
 
 
 class VRChatCalendarEvent(BaseModel):

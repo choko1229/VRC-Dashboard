@@ -1652,6 +1652,223 @@ textarea:focus {
     margin-right: 0;
 }
 
+/* アバター一覧テーブル表示 */
+.avatar-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+    margin: var(--space-4) 0;
+}
+
+.avatar-filter-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.avatar-filter-label {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.avatar-filter-toggle {
+    display: flex;
+    gap: var(--space-1);
+}
+
+.avatar-filter-toggle-btn {
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    color: var(--color-text-muted);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-pill);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.avatar-filter-toggle-btn:hover {
+    border-color: var(--color-avatars-border);
+}
+
+.avatar-filter-toggle-btn.active {
+    background-color: var(--color-avatars-primary);
+    border-color: var(--color-avatars-primary);
+    color: #fff;
+    font-weight: 700;
+}
+
+.avatar-search-input {
+    margin-left: auto;
+    min-width: 200px;
+}
+
+.avatar-table-wrap {
+    overflow-x: auto;
+}
+
+.avatar-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+    white-space: nowrap;
+}
+
+.avatar-table th {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.avatar-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+}
+
+.avatar-table-row:hover {
+    background-color: var(--color-avatars-bg-soft);
+}
+
+.avatar-table-sort-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.avatar-table-sort-link:hover {
+    color: var(--color-avatars-primary);
+}
+
+.avatar-table-sort-arrow {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+}
+
+.avatar-table-cell-name a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-text);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.avatar-table-cell-name a:hover {
+    color: var(--color-avatars-primary);
+}
+
+.avatar-table-thumb {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+.avatar-table-thumb-placeholder {
+    background-color: var(--color-avatars-bg-soft);
+    border: 1px solid var(--color-avatars-border);
+}
+
+.avatar-table-cell-platform,
+.avatar-table-cell-date {
+    color: var(--color-text-muted);
+}
+
+.avatar-visibility-badge {
+    display: inline-block;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-pill);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+}
+
+.avatar-visibility-public {
+    background-color: var(--color-avatars-bg-soft);
+    color: var(--color-avatars-hover);
+}
+
+.avatar-visibility-private {
+    background-color: var(--color-border);
+    color: var(--color-text-muted);
+}
+
+.avatar-table-cell-actions {
+    text-align: right;
+}
+
+.avatar-row-menu {
+    position: relative;
+    display: inline-block;
+}
+
+.avatar-row-menu-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-pill);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    list-style: none;
+}
+
+.avatar-row-menu-trigger::-webkit-details-marker {
+    display: none;
+}
+
+.avatar-row-menu-trigger:hover {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+}
+
+.avatar-row-menu-list {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    min-width: 180px;
+    padding: var(--space-1);
+    border-radius: var(--radius-md);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.avatar-row-menu-list a,
+.avatar-row-menu-list button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    border: none;
+    background: transparent;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    font-family: inherit;
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.avatar-row-menu-list a:hover,
+.avatar-row-menu-list button:hover {
+    background-color: var(--color-avatars-bg-soft);
+    color: var(--color-avatars-hover);
+}
+
 /* プレイ記録ページ */
 .stats-summary-grid {
     display: grid;
@@ -1784,6 +2001,7 @@ textarea:focus {
 .feed-table-wrap,
 .notification-table-wrap,
 .friend-table-wrap,
+.avatar-table-wrap,
 .detail-tabs,
 .activity-heatmap,
 .friend-json-view,
@@ -1816,7 +2034,8 @@ textarea:focus {
     }
 
     .feed-search-input,
-    .notification-search-input {
+    .notification-search-input,
+    .avatar-search-input {
         margin-left: 0;
         width: 100%;
         min-width: 0;

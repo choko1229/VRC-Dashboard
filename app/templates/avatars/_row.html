@@ -1,0 +1,56 @@
+{% from "partials/icons.html" import icon_more %}
+{% set platforms = [] %}
+{% if avatar.performance_rank %}{% set _ = platforms.append("PC") %}{% endif %}
+{% if avatar.performance_rank_android %}{% set _ = platforms.append("Android") %}{% endif %}
+{% if avatar.performance_rank_ios %}{% set _ = platforms.append("iOS") %}{% endif %}
+<tr class="avatar-table-row" id="avatar-row-{{ avatar.id }}">
+    <td class="avatar-table-cell-name">
+        <a href="/avatars/{{ avatar.id }}">
+            {% if avatar.thumbnail_image_url %}
+            <img class="avatar-table-thumb" src="{{ avatar.thumbnail_image_url }}" alt="">
+            {% else %}
+            <span class="avatar-table-thumb avatar-table-thumb-placeholder"></span>
+            {% endif %}
+            <span>{{ avatar.name }}</span>
+        </a>
+        {% if error %}<div class="error-text">{{ error }}</div>{% endif %}
+    </td>
+    <td>
+        <span class="tag-chips">
+            {% for tag in avatar_tags_map.get(avatar.id, []) %}
+            <span class="tag-chip">{{ tag.name }}</span>
+            {% endfor %}
+        </span>
+    </td>
+    <td class="avatar-table-cell-platform">{{ platforms|join("、") if platforms else "-" }}</td>
+    <td>
+        <span class="avatar-visibility-badge avatar-visibility-{{ avatar.release_status }}">
+            {{ "パブリック" if avatar.release_status == "public" else "プライベート" }}
+        </span>
+    </td>
+    <td class="text-muted">-</td>
+    <td>{{ avatar.version if avatar.version is not none else "-" }}</td>
+    <td class="text-muted">-</td>
+    <td>{{ avatar.performance_rank or "-" }}</td>
+    <td>{{ avatar.performance_rank_android or "-" }}</td>
+    <td>{{ avatar.performance_rank_ios or "-" }}</td>
+    <td class="avatar-table-cell-date">{{ avatar.updated_at_vrchat|jst("%Y-%m-%d %H:%M") }}</td>
+    <td class="avatar-table-cell-date">{{ avatar.created_at_vrchat|jst("%Y-%m-%d %H:%M") }}</td>
+    <td class="avatar-table-cell-actions">
+        <details class="avatar-row-menu">
+            <summary class="avatar-row-menu-trigger" aria-label="操作メニュー">{{ icon_more(18) }}</summary>
+            <div class="avatar-row-menu-list">
+                <a href="/avatars/{{ avatar.id }}">詳細を表示</a>
+                <a href="/avatars/{{ avatar.id }}#tags">タグを管理</a>
+                <button type="button" data-avatar-rename="{{ avatar.id }}" data-current-name="{{ avatar.name }}">名前を変更</button>
+                <button type="button" data-avatar-description="{{ avatar.id }}" data-current-description="{{ avatar.description or '' }}">説明を変更</button>
+                <button type="button"
+                    hx-post="/avatars/{{ avatar.id }}/release-status"
+                    hx-vals='{"release_status": "{{ 'private' if avatar.release_status == 'public' else 'public' }}"}'
+                    hx-target="#avatar-row-{{ avatar.id }}" hx-swap="outerHTML">
+                    {{ "非公開にする" if avatar.release_status == "public" else "公開する" }}
+                </button>
+            </div>
+        </details>
+    </td>
+</tr>

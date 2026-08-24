@@ -47,6 +47,73 @@ async def test_sync_avatars_creates_and_updates(
         assert rows[0].release_status == "private"
 
 
+async def test_sync_avatars_stores_per_platform_performance_and_metadata(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        avatars = [
+            VRChatAvatar.model_validate(
+                {
+                    "id": "avtr_multi",
+                    "name": "Multi Platform Avatar",
+                    "description": "テスト用の説明",
+                    "releaseStatus": "public",
+                    "version": 3,
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "updated_at": "2026-02-01T00:00:00Z",
+                    "unityPackages": [
+                        {"platform": "standalonewindows", "performanceRating": "Good"},
+                        {"platform": "android", "performanceRating": "Medium"},
+                        {"platform": "ios", "performanceRating": "Poor"},
+                    ],
+                }
+            )
+        ]
+        await avatars_service.sync_avatars_from_vrchat(db, avatars)
+
+        row = (
+            await db.execute(select(Avatar).where(Avatar.vrchat_avatar_id == "avtr_multi"))
+        ).scalar_one()
+        assert row.description == "テスト用の説明"
+        assert row.version == 3
+        assert row.performance_rank == "Good"
+        assert row.performance_rank_android == "Medium"
+        assert row.performance_rank_ios == "Poor"
+        assert row.created_at_vrchat is not None
+        assert row.updated_at_vrchat is not None
+
+
+async def test_update_avatar_fields_updates_only_given_fields(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        db.add(
+            Avatar(
+                vrchat_avatar_id="avtr_edit",
+                name="Original",
+                description="Original description",
+                release_status="private",
+            )
+        )
+        await db.commit()
+        avatar = (
+            await db.execute(select(Avatar).where(Avatar.vrchat_avatar_id == "avtr_edit"))
+        ).scalar_one()
+
+        await avatars_service.update_avatar_fields(db, avatar.id, name="Renamed")
+        refreshed = await db.get(Avatar, avatar.id)
+        assert refreshed is not None
+        assert refreshed.name == "Renamed"
+        assert refreshed.description == "Original description"
+        assert refreshed.release_status == "private"
+
+        await avatars_service.update_avatar_fields(db, avatar.id, release_status="public")
+        refreshed_again = await db.get(Avatar, avatar.id)
+        assert refreshed_again is not None
+        assert refreshed_again.release_status == "public"
+        assert refreshed_again.name == "Renamed"
+
+
 async def test_notes_and_tags_flow(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

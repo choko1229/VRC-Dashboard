@@ -26,13 +26,42 @@ async def sync_avatars_from_vrchat(db: AsyncSession, avatars: list[VRChatAvatar]
             db.add(row)
 
         row.name = vrchat_avatar.name
+        row.description = vrchat_avatar.description
         row.thumbnail_image_url = vrchat_avatar.thumbnail_image_url
         row.release_status = vrchat_avatar.release_status
-        row.performance_rank = vrchat_avatar.performance_rating
+        row.version = vrchat_avatar.version
+        row.performance_rank = vrchat_avatar.performance_rating or (
+            vrchat_avatar.performance_rating_for("standalonewindows")
+        )
+        row.performance_rank_android = vrchat_avatar.performance_rating_for("android")
+        row.performance_rank_ios = vrchat_avatar.performance_rating_for("ios")
+        row.created_at_vrchat = vrchat_avatar.created_at
         row.updated_at_vrchat = vrchat_avatar.updated_at
         row.last_synced_at = now
 
     await db.commit()
+
+
+async def update_avatar_fields(
+    db: AsyncSession,
+    avatar_id: int,
+    *,
+    name: str | None = None,
+    description: str | None = None,
+    release_status: str | None = None,
+) -> Avatar | None:
+    """VRChat側の更新に成功した後、ローカルDBのキャッシュ値を反映する。"""
+    avatar = await db.get(Avatar, avatar_id)
+    if avatar is None:
+        return None
+    if name is not None:
+        avatar.name = name
+    if description is not None:
+        avatar.description = description
+    if release_status is not None:
+        avatar.release_status = release_status
+    await db.commit()
+    return avatar
 
 
 async def update_notes(db: AsyncSession, avatar_id: int, notes: str | None) -> Avatar | None:

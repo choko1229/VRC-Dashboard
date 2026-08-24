@@ -146,6 +146,14 @@
 </svg>
 {% endmacro %}
 
+{% macro icon_more(size=18) %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="currentColor" class="icon">
+    <circle cx="5" cy="12" r="2"/>
+    <circle cx="12" cy="12" r="2"/>
+    <circle cx="19" cy="12" r="2"/>
+</svg>
+{% endmacro %}
+
 {% macro icon_chart_bar(size=20) %}
 <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
     <path d="M4 20V10M12 20V4M20 20v-7"/>

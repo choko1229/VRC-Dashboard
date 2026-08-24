@@ -334,3 +334,26 @@ class VRChatClient:
         エンドポイント: PUT /auth/user/notifications/{id}/hide。
         """
         await self._request("PUT", f"/auth/user/notifications/{notification_id}/hide")
+
+    async def update_avatar(
+        self,
+        avatar_id: str,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        release_status: str | None = None,
+    ) -> VRChatAvatar:
+        """アバターのメタデータを更新する（実際にVRChat側のデータを書き換える）。
+
+        エンドポイント: PUT /avatars/{avatarId}。指定したフィールドのみ送信する
+        （未指定のフィールドをnull送信して消してしまわないようにするため）。
+        """
+        payload: dict[str, Any] = {}
+        if name is not None:
+            payload["name"] = name
+        if description is not None:
+            payload["description"] = description
+        if release_status is not None:
+            payload["releaseStatus"] = release_status
+        response = await self._request("PUT", f"/avatars/{avatar_id}", json=payload)
+        return VRChatAvatar.model_validate(response.json())

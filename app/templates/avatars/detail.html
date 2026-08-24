@@ -5,9 +5,24 @@
 {% if avatar.thumbnail_image_url %}
 <img class="avatar-thumb-large" src="{{ avatar.thumbnail_image_url }}" alt="">
 {% endif %}
-<p>公開設定: {{ avatar.release_status }} ｜ パフォーマンスランク: {{ avatar.performance_rank or "不明" }}</p>
+<p>
+    公開設定: {{ "パブリック" if avatar.release_status == "public" else "プライベート" }} ｜
+    バージョン: {{ avatar.version if avatar.version is not none else "不明" }}
+</p>
+<p>
+    PCパフォーマンス: {{ avatar.performance_rank or "不明" }} ｜
+    Androidパフォーマンス: {{ avatar.performance_rank_android or "不明" }} ｜
+    iOSパフォーマンス: {{ avatar.performance_rank_ios or "不明" }}
+</p>
+<p>
+    作成日時: {{ avatar.created_at_vrchat|jst("%Y-%m-%d %H:%M") }} ｜
+    最終更新日時: {{ avatar.updated_at_vrchat|jst("%Y-%m-%d %H:%M") }}
+</p>
+{% if avatar.description %}
+<p class="friend-profile-bio">{{ avatar.description }}</p>
+{% endif %}
 
-<h2>タグ</h2>
+<h2 id="tags">タグ</h2>
 <div id="tag-assignment">
     {% include "avatars/_tag_assignment.html" %}
 </div>

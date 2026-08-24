@@ -122,7 +122,18 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
     `os.startfile("vrchat://launch?id=<location>")`でVRChatを起動してインスタンスに
     参加させる。フレンドリクエストの承諾/拒否やメッセージ・Boopの削除はVRChat REST API
     だけで完結し、PC側の操作は不要。
-- **アバター準備状況**: 自分のアバター一覧の同期、タグ付け、メモ管理。
+- **アバター準備状況**（`/avatars`）: 自分のアバター一覧をVRCX風のテーブル表示で管理する。
+  名前／タグ（ダッシュボード独自のタグ）／プラットフォーム／可視性／バージョン／
+  プラットフォーム別パフォーマンスランク（PC・Android・iOS）／最終更新日時／作成日時の列を持ち、
+  列見出しクリックでソート、可視性・プラットフォームでの絞り込み、名前検索、タグでの絞り込みに
+  対応する。「過ごした時間」「インポスター」列はVRChat同期・ゲームログのどちらからも取得手段が
+  無いため常に「-」表示（非対応）。各行の「…」メニューから、VRChat本体のアバターデータを
+  実際に書き換える操作（名前変更・説明変更・公開/非公開切り替え）ができる
+  （`VRChatClient.update_avatar`、`PUT /avatars/{avatarId}`）。VRChatと連携していない場合や
+  API呼び出しが失敗した場合は、ローカルDBを更新せずエラーを行内に表示する
+  （実データとダッシュボードの表示がズレないようにするため）。画像の変更・コンテンツタグ/
+  スタイル・作者タグの変更・インポスター作成は、VRChat側のファイルアップロードAPIや
+  非公式エンドポイントの仕様が不確実なため未実装。
 - **今日の予定**: 手動登録またはVRChatグループカレンダーからの取り込みによるスケジュール管理
   （月間/週間カレンダー表示）。
 - **通知**: ブラウザ通知（Web Push、VAPID鍵は自動生成）、および既存Discord BOTへのHTTP通知
@@ -287,6 +298,12 @@ tests/                  # unit / integration
   `friend_presence_event`（本アプリが実際に観測できた期間のオンライン化イベント）を用いる。
   「共通のフレンド」「お気に入りワールド」「アバター」はVRChat APIが他ユーザーの当該データを
   公開していないため実装していない。
+- HTMXの`hx-vals='js:{...}'`で`event.target.value`等イベントオブジェクトを参照する書き方は、
+  `hx-trigger`に`delay:...ms`が付いていると壊れる（リクエスト送信時点で元のイベントが失われ
+  `TypeError: Cannot read properties of undefined (reading 'target')`が発生し、リクエスト自体が
+  飛ばない）。検索ボックス等、遅延トリガーと組み合わせる入力欄は`event.target.value`に頼らず、
+  input/select自体に`name`属性を付けてHTMXの標準的な値収集に任せること
+  （`app/templates/avatars/list.html`のアバター名検索欄参照）。
 - タイムゾーン変換（アクティビティのJST集計等）にはPython標準の`zoneinfo`を使用しており、
   IANAタイムゾーンDBを持たない環境（Windows開発機やslim系Dockerイメージ等）でも動くよう
   `tzdata`パッケージを依存関係に含めている。

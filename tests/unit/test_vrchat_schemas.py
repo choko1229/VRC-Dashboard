@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.schemas.vrchat import (
+    VRChatAvatar,
     VRChatUser,
     parse_instance_privacy_label,
     parse_platform_label,
@@ -98,3 +99,24 @@ def test_parse_platform_label() -> None:
     assert parse_platform_label("standalonewindows") == "PC (Windows)"
     assert parse_platform_label("android") == "Android (Quest)"
     assert parse_platform_label("unknown_platform") == "unknown_platform"
+
+
+def test_avatar_performance_rating_for_platform() -> None:
+    avatar = VRChatAvatar.model_validate(
+        {
+            "id": "avtr_1",
+            "name": "Test",
+            "unityPackages": [
+                {"platform": "standalonewindows", "performanceRating": "Good"},
+                {"platform": "android", "performanceRating": "Medium"},
+            ],
+        }
+    )
+    assert avatar.performance_rating_for("standalonewindows") == "Good"
+    assert avatar.performance_rating_for("android") == "Medium"
+    assert avatar.performance_rating_for("ios") is None
+
+
+def test_avatar_performance_rating_for_no_packages() -> None:
+    avatar = VRChatAvatar.model_validate({"id": "avtr_2", "name": "Test"})
+    assert avatar.performance_rating_for("android") is None
