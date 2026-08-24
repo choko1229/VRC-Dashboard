@@ -45,6 +45,69 @@ def test_extract_world_thumbnail_url_falls_back_to_image_url() -> None:
     assert pipeline._extract_world_thumbnail_url({}) is None
 
 
+def test_extract_display_name_returns_none_without_fallback_to_user_id() -> None:
+    """本番で発生した不具合の回帰テスト: displayNameが無い場合にuser_id(usr_xxx)へ
+    フォールバックしてはいけない（friend.display_nameへ永続化されるとUUIDが
+    表示され続けてしまうため）。
+    """
+    assert pipeline._extract_display_name(None, "") is None
+    assert pipeline._extract_display_name(None, "Alice") == "Alice"
+    assert pipeline._extract_display_name("Bob", "Alice") == "Bob"
+
+
+async def test_on_friend_active_without_display_name_does_not_overwrite_existing_name(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """friend-activeイベントにdisplayNameが含まれない場合、既存の表示名を
+    user_id(usr_xxx)で上書きしないことの回帰テスト。
+    """
+    async with db_session_factory() as db:
+        sender = FakeNotificationSender()
+        await pipeline._on_friend_online(
+            db, sender, {"userId": "usr_active_1", "user": {"displayName": "Carol"}}
+        )
+        await pipeline._on_friend_active(db, sender, {"userId": "usr_active_1"})
+
+        friend = (
+            await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_active_1"))
+        ).scalar_one()
+        assert friend.display_name == "Carol"
+        assert friend.online_state == "active"
+
+
+async def test_on_friend_online_without_display_name_does_not_overwrite_existing_name(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with db_session_factory() as db:
+        sender = FakeNotificationSender()
+        await pipeline._on_friend_online(
+            db, sender, {"userId": "usr_online_1", "user": {"displayName": "Dave"}}
+        )
+        # 2回目のfriend-onlineでdisplayNameが省略されているケース。
+        await pipeline._on_friend_online(db, sender, {"userId": "usr_online_1", "user": {}})
+
+        friend = (
+            await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_online_1"))
+        ).scalar_one()
+        assert friend.display_name == "Dave"
+
+
+async def test_on_friend_online_first_sighting_without_display_name_uses_user_id(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """新規フレンド(初見)でdisplayNameが取れない場合のみ、暫定的にuser_idを使う
+    （次にdisplayName付きのイベントが来れば置き換わる）。
+    """
+    async with db_session_factory() as db:
+        sender = FakeNotificationSender()
+        await pipeline._on_friend_online(db, sender, {"userId": "usr_new_1", "user": {}})
+
+        friend = (
+            await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_new_1"))
+        ).scalar_one()
+        assert friend.display_name == "usr_new_1"
+
+
 async def test_on_friend_offline_updates_friend(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

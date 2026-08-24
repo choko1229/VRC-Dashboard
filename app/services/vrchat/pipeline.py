@@ -46,6 +46,19 @@ def _extract_world_thumbnail_url(world: Any) -> str | None:
     return thumbnail if isinstance(thumbnail, str) else None
 
 
+def _extract_display_name(*candidates: object) -> str | None:
+    """最初に見つかった非空文字列のdisplayNameを返す。
+
+    どの候補にも無い場合はNone（呼び出し側はuser_id等へのフォールバックをしないこと。
+    フォールバック値がfriend.display_nameに永続化されるとUUIDがそのまま表示され続ける
+    不具合になる——本番で実際に発生した不具合）。
+    """
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    return None
+
+
 async def _on_friend_online(
     db: AsyncSession, sender: NotificationSender, content: dict[str, Any]
 ) -> None:
@@ -54,7 +67,7 @@ async def _on_friend_online(
     user_id = content.get("userId") or user.get("id")
     if not isinstance(user_id, str):
         return
-    display_name = user.get("displayName") or content.get("displayName") or user_id
+    display_name = _extract_display_name(user.get("displayName"), content.get("displayName"))
     location = content.get("location") or user.get("location")
     world = content.get("world")
     world_name = world.get("name") if isinstance(world, dict) else None
@@ -63,7 +76,7 @@ async def _on_friend_online(
         db,
         sender,
         vrchat_user_id=user_id,
-        display_name=str(display_name),
+        display_name=display_name,
         location=location if isinstance(location, str) else None,
         world_name=world_name if isinstance(world_name, str) else None,
         world_thumbnail_url=_extract_world_thumbnail_url(world),
@@ -77,9 +90,9 @@ async def _on_friend_active(
     user_id = content.get("userId")
     if not isinstance(user_id, str):
         return
-    display_name = content.get("displayName") or user_id
+    display_name = _extract_display_name(content.get("displayName"))
     await friends_service.handle_friend_active(
-        db, sender, vrchat_user_id=user_id, display_name=str(display_name)
+        db, sender, vrchat_user_id=user_id, display_name=display_name
     )
 
 
@@ -89,9 +102,9 @@ async def _on_friend_offline(
     user_id = content.get("userId")
     if not isinstance(user_id, str):
         return
-    display_name = content.get("displayName") or user_id
+    display_name = _extract_display_name(content.get("displayName"))
     await friends_service.handle_friend_offline(
-        db, sender, vrchat_user_id=user_id, display_name=str(display_name)
+        db, sender, vrchat_user_id=user_id, display_name=display_name
     )
 
 
@@ -101,7 +114,7 @@ async def _on_friend_location(
     user_id = content.get("userId")
     if not isinstance(user_id, str):
         return
-    display_name = content.get("displayName") or user_id
+    display_name = _extract_display_name(content.get("displayName"))
     location = content.get("location")
     world = content.get("world")
     world_name = world.get("name") if isinstance(world, dict) else None
@@ -110,7 +123,7 @@ async def _on_friend_location(
         db,
         sender,
         vrchat_user_id=user_id,
-        display_name=str(display_name),
+        display_name=display_name,
         location=location if isinstance(location, str) else None,
         world_name=world_name if isinstance(world_name, str) else None,
         world_thumbnail_url=_extract_world_thumbnail_url(world),

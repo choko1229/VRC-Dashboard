@@ -242,6 +242,19 @@ tests/                  # unit / integration
   画面表示は日本時間の利用者を想定しているため、テンプレート側で生の`.strftime()`を呼ぶと
   UTCのまま表示されてしまう不具合になる。必ず`app.core.templating`の`jst`フィルタ
   （`{{ value|jst("%Y-%m-%d %H:%M") }}`、Noneは"-"を返す）を経由してJSTに変換すること。
+- Pipelineの`friend-active`/`friend-offline`/`friend-location`イベントはdisplayNameを
+  含まないことがあり、以前は`display_name = content.get("displayName") or user_id`という
+  「表示名が無ければuser_id（`usr_xxxxxxxx`のUUID）を使う」フォールバックが
+  `friend.display_name`に永続化されてしまい、フレンド一覧等に表示名の代わりにUUIDが
+  表示され続ける不具合があった（本番で発生）。`app.services.vrchat.pipeline`の
+  `_extract_display_name`はuser_idへのフォールバックをせず、取得できなかった場合はNoneを
+  返して呼び出し側（`friends_service`の各`handle_friend_*`）が既存の表示名を上書きしない
+  ようにして解消した。新規フレンドの初見時のみ、`_get_or_create_friend`が暫定的に
+  user_idを使う（次にdisplayName付きのイベントが来れば置き換わる）。
+  **既にUUIDに書き換わってしまった既存データは、この修正だけでは直らない**
+  （次にdisplayName付きのイベントが来るまで残る）ため、「VRChatと同期」を1回実行して
+  REST APIから正しい表示名を取得し直すこと（`bootstrap_friends_from_vrchat`が全フレンド分の
+  `display_name`をREST側の値で無条件に上書きする）。
 - VRChatの認証情報・Discord OAuthシークレット・VAPID秘密鍵はFernetで暗号化してDBに保存する
   （暗号鍵は `FERNET_MASTER_KEY` 未設定時 `data/fernet.key` に自動生成・永続化される）。
 - フレンド一覧／サイドバーの「オンライン」区分は、各フレンドの`current_location`を突き合わせて
