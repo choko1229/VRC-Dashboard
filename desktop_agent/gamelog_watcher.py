@@ -24,10 +24,12 @@ import argparse
 import json
 import logging
 import os
+import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +61,29 @@ _DEFAULT_POLL_INTERVAL_SECONDS = 1.0
 _MAX_BUFFERED_EVENTS = 5000
 _DEFAULT_STATE_FILE = Path(__file__).resolve().parent / "gamelog_agent_state.json"
 _DEFAULT_CONFIG_FILE = Path(__file__).resolve().parent / "gamelog_agent_config.json"
+
+_VRCHAT_PROCESS_NAME = "VRChat.exe"
+_DEFAULT_PROCESS_CHECK_INTERVAL_SECONDS = 15.0
+
+
+def is_vrchat_running() -> bool:
+    """タスク一覧を見てVRChatプロセスがまだ動いているか確認する。
+
+    VRChatを強制終了/クラッシュで落とすと、ログに"OnLeftRoom"が出力されないまま
+    プロセスだけ消える。これを検知できないと、サーバー側は「まだ滞在中」のまま扱い続け、
+    ダッシュボードを開くたびに経過時間が際限なく伸びてしまう。
+    確認自体に失敗した場合は「起動中」とみなす（フェイルセーフ。誤検知で滞在中の
+    インスタンスを強制的に退出扱いにしてしまう方が実害が大きいため）。
+    """
+    try:
+        output = subprocess.check_output(
+            ["tasklist", "/FI", f"IMAGENAME eq {_VRCHAT_PROCESS_NAME}", "/NH"],
+            timeout=5,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return True
+    return _VRCHAT_PROCESS_NAME.lower().encode() in output.lower()
 
 
 def default_log_dir() -> Path:
@@ -151,12 +176,14 @@ class GameLogWatcher:
         log_dir: Path,
         state_file: Path,
         flush_interval_seconds: float = _DEFAULT_FLUSH_INTERVAL_SECONDS,
+        process_check_interval_seconds: float = _DEFAULT_PROCESS_CHECK_INTERVAL_SECONDS,
     ) -> None:
         self._server_url = server_url
         self._api_key = api_key
         self._log_dir = log_dir
         self._state_file = state_file
         self._flush_interval_seconds = flush_interval_seconds
+        self._process_check_interval_seconds = process_check_interval_seconds
 
         self._current_file: Path | None = None
         self._read_offset = 0
@@ -164,6 +191,10 @@ class GameLogWatcher:
         self._pending_join: ParsedEvent | None = None
         self._buffer: list[dict[str, Any]] = []
         self._last_flush_at = time.monotonic()
+        # instance_joinを見てからinstance_leaveを見るまでの間 True。
+        # VRChatプロセスの生死監視（_check_vrchat_still_running）が、退出漏れの検知に使う。
+        self._in_room = False
+        self._last_process_check_at = time.monotonic()
 
     def _enqueue(self, event: ParsedEvent) -> None:
         self._buffer.append(event_to_payload(event))
@@ -183,14 +214,31 @@ class GameLogWatcher:
         if parsed.event_type == "instance_join":
             self._flush_pending_join()
             self._pending_join = parsed
+            self._in_room = True
             return
         if parsed.event_type == "world_name":
             if self._pending_join is not None:
                 self._pending_join.world_name = parsed.world_name
                 self._flush_pending_join()
             return
+        if parsed.event_type == "instance_leave":
+            self._in_room = False
         self._flush_pending_join()
         self._enqueue(parsed)
+
+    def _check_vrchat_still_running(self) -> None:
+        """滞在中のはずなのにVRChatプロセスが消えていたら、退出イベントを補完する。"""
+        if not self._in_room:
+            return
+        if time.monotonic() - self._last_process_check_at < self._process_check_interval_seconds:
+            return
+        self._last_process_check_at = time.monotonic()
+        if is_vrchat_running():
+            return
+        logger.info("VRChatプロセスの終了を検知したため、インスタンス退出を記録します")
+        self._handle_parsed_event(
+            ParsedEvent(event_type="instance_leave", occurred_at=datetime.now())
+        )
 
     def _open_next_file(self) -> bool:
         """新しいログファイルへの切り替えが必要なら切り替える。切り替えたらTrueを返す。"""
@@ -245,6 +293,8 @@ class GameLogWatcher:
                 parsed = parse_line(line)
                 if parsed is not None:
                     self._handle_parsed_event(parsed)
+
+            self._check_vrchat_still_running()
 
             if time.monotonic() - self._last_flush_at >= self._flush_interval_seconds:
                 self._flush()

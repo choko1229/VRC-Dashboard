@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.game_log_event import GameLogEvent
 from app.models.game_log_instance import GameLogInstance
 from app.schemas.game_log import GameLogEventIn
+from app.services import game_log_agent_token_service
 
 logger = logging.getLogger(__name__)
 
@@ -180,8 +181,8 @@ def format_duration_seconds(total_seconds: float) -> str:
     return f"{hours}時間{minutes}分" if minutes else f"{hours}時間"
 
 
-def _format_duration(joined_at: datetime, left_at: datetime | None) -> str:
-    end = left_at or datetime.now(UTC)
+def _format_duration(joined_at: datetime, left_at: datetime | None, *, now: datetime) -> str:
+    end = left_at or now
     joined_aware = joined_at if joined_at.tzinfo is not None else joined_at.replace(tzinfo=UTC)
     end_aware = end if end.tzinfo is not None else end.replace(tzinfo=UTC)
     return format_duration_seconds((end_aware - joined_aware).total_seconds())
@@ -216,13 +217,14 @@ async def get_instance_summaries(
         for instance_id, event_type, count in counts_result.all()
     }
 
+    now = await game_log_agent_token_service.get_effective_now(db)
     summaries = [
         GameLogInstanceSummary(
             instance=instance,
             join_count=counts.get((instance.id, "player_join"), 0),
             leave_count=counts.get((instance.id, "player_leave"), 0),
             video_count=counts.get((instance.id, "video_play"), 0),
-            duration_label=_format_duration(instance.joined_at, instance.left_at),
+            duration_label=_format_duration(instance.joined_at, instance.left_at, now=now),
         )
         for instance in instances
     ]

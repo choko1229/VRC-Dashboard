@@ -89,11 +89,22 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
     後から別のPCをペアリングしても既存デバイスのトークンは無効化されない）。
   - **自動更新**: 起動時と6時間ごとにGitHub Releasesの最新版を確認し、自身より新しければ
     ダウンロードして自己置換・再起動する（サーバーには自動更新用のエンドポイントを持たない）。
+  - **退出漏れ対策**: VRChatを強制終了/クラッシュで落とすとログに`OnLeftRoom`が出力されず、
+    サーバー側は該当インスタンスを「まだ滞在中」（`game_log_instance.left_at is None`）の
+    まま扱い続けてしまい、ページを開くたびに経過時間が際限なく伸びる不具合があった。対策は2段構え。
+    (1) `desktop_agent/gamelog_watcher.py`が15秒おきにVRChatプロセスの生死を`tasklist`で確認し、
+    滞在中のはずなのにプロセスが消えていたら退出イベントを補って送信する（根本原因側の対策）。
+    (2) サーバー側は`/api/agent/commands`への5秒間隔ポーリング（`command_poller.py`）を事実上の
+    ハートビートとして扱い（`game_log_agent_token.last_used_at`）、2分以上疎通が無い場合は
+    経過時間表示の基準時刻を「今」ではなく最終疎通時刻に固定する
+    （`game_log_agent_token_service.get_effective_now`。PCのスリープ/シャットダウン等
+    エージェントごと応答が止まった場合の保険）。
   詳細は`desktop_agent/README.md`参照。
 - **プレイ記録**（`/stats`）: 自分自身のプレイ傾向を「いつ／どのぐらい／どんなワールドで／
   だれと」の観点でグラフ表示する。データソースはゲームログ（`game_log_instance`/
   `game_log_event`）のみのため、ゲームログ機能同様デスクトップエージェントが稼働していた
-  期間しか集計できない。
+  期間しか集計できない。進行中インスタンスの合計時間も、ゲームログの退出漏れ対策
+  （上記`get_effective_now`）を共有している。
   - **いつ**: 訪問開始時刻（JST）を曜日×時間帯のヒートマップで表示
     （`friends_service.compute_activity_stats`と同じCSSグリッド方式のヒートマップ、
     `app/services/play_stats_service.py`の`get_weekday_hour_heatmap`）。

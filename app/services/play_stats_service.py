@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.friend import Friend
 from app.models.game_log_instance import GameLogInstance
-from app.services import game_log_service
+from app.services import game_log_agent_token_service, game_log_service
 
 _JST = ZoneInfo("Asia/Tokyo")
 _WEEKDAY_LABELS_JA = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
@@ -76,8 +76,10 @@ async def _get_all_instances(db: AsyncSession) -> list[GameLogInstance]:
     return list(result.scalars().all())
 
 
-def get_summary(instances: list[GameLogInstance], friend_count: int) -> PlayStatsSummary:
-    now = datetime.now(UTC)
+def get_summary(
+    instances: list[GameLogInstance], friend_count: int, *, now: datetime | None = None
+) -> PlayStatsSummary:
+    now = now or datetime.now(UTC)
     total_minutes = sum(_duration_minutes(i, now=now) for i in instances)
     distinct_worlds = {i.world_id or i.location for i in instances}
     return PlayStatsSummary(
@@ -122,13 +124,13 @@ def get_weekday_hour_heatmap(instances: list[GameLogInstance]) -> HeatmapStats:
 
 
 def get_daily_play_minutes(
-    instances: list[GameLogInstance], *, days: int = 30
+    instances: list[GameLogInstance], *, days: int = 30, now: datetime | None = None
 ) -> list[DailyPlayEntry]:
     """直近days日分（JST基準の暦日）の合計プレイ時間を日別に集計する。
 
     日をまたぐ滞在は、開始日（JST）に丸ごと計上する簡易な近似。
     """
-    now = datetime.now(UTC)
+    now = now or datetime.now(UTC)
     now_jst_date = now.astimezone(_JST).date()
     start_date = now_jst_date - timedelta(days=days - 1)
 
@@ -146,8 +148,10 @@ def get_daily_play_minutes(
     return entries
 
 
-def get_top_worlds(instances: list[GameLogInstance], *, limit: int = 10) -> list[WorldStats]:
-    now = datetime.now(UTC)
+def get_top_worlds(
+    instances: list[GameLogInstance], *, limit: int = 10, now: datetime | None = None
+) -> list[WorldStats]:
+    now = now or datetime.now(UTC)
     grouped: dict[str, WorldStats] = {}
     for instance in instances:
         key = instance.world_id or instance.location
@@ -199,11 +203,12 @@ async def get_play_stats_page(
 ) -> PlayStatsPage:
     instances = await _get_all_instances(db)
     all_friends_together = await get_all_friends_together(db)
-    summary = get_summary(instances, len(all_friends_together))
+    now = await game_log_agent_token_service.get_effective_now(db)
+    summary = get_summary(instances, len(all_friends_together), now=now)
     return PlayStatsPage(
         summary=summary,
         heatmap=get_weekday_hour_heatmap(instances),
-        daily=get_daily_play_minutes(instances, days=daily_days),
-        top_worlds=get_top_worlds(instances),
+        daily=get_daily_play_minutes(instances, days=daily_days, now=now),
+        top_worlds=get_top_worlds(instances, now=now),
         top_friends=all_friends_together[:top_friends_limit],
     )

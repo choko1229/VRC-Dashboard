@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.models.game_log_agent_token import GameLogAgentToken
 from app.models.game_log_event import GameLogEvent
 from app.models.game_log_instance import GameLogInstance
 from app.schemas.game_log import GameLogEventIn
@@ -164,6 +165,30 @@ async def test_get_instance_summaries_counts_and_pagination(
         assert summary.leave_count == 1
         assert summary.video_count == 1
         assert summary.duration_label == "15分"
+
+
+async def test_get_instance_summaries_caps_open_duration_at_stale_heartbeat(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """エージェントが長時間応答していない開いたインスタンスは、退出時刻不明のまま
+    「今」まで際限なく経過時間を伸ばさず、最終疎通時刻で頭打ちにする（退出漏れ対策）。
+    """
+    async with db_session_factory() as db:
+        await game_log_service.ingest_events(
+            db,
+            [
+                GameLogEventIn(
+                    event_type="instance_join", occurred_at=_dt(0), location="wrld_a:1"
+                ),
+            ],
+        )
+        db.add(GameLogAgentToken(token_hash="dummy", last_used_at=_dt(20)))
+        await db.commit()
+
+        summaries, _ = await game_log_service.get_instance_summaries(db, page=0)
+
+        assert summaries[0].instance.left_at is None
+        assert summaries[0].duration_label == "20分"
 
 
 async def test_get_instance_events_orders_newest_first(
