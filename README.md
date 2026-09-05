@@ -251,7 +251,14 @@ tests/                  # unit / integration
 
 ## 補足
 
-- フォントは全て「LINE Seed JP」（Th/Rg/Bd/Eb）に統一している。
+- デザイントークン（`app/static/css/tokens.css`）はOpenSea風スタイルリファレンス
+  （`docs/DESIGN.md`）に準拠している。ダーク（Void〜Slateの5段階の面階調 + カテゴリ別に
+  淡くしたアクセントカラー）を既定テーマとし、`data-theme="light"`指定時のみ従来のライト配色に
+  切り替わる。角丸はカード8px・ボタン/タグ/入力4pxを上限とし、カード類の影はドロップシャドウ
+  ではなく1px内側リング（`--shadow-card`/`--shadow-elevated`）で表現する。
+- 本文は「LINE Seed JP」（Th/Rg/Bd/Eb）に統一し、価格・日時・IDなど桁を揃えたい純粋な数値/
+  英数字列にのみ`--font-mono`（JetBrains Mono）を当てる（日本語と数字が混在する文字列には
+  適用しない）。
 - SQLiteは`app.db.base.create_engine_and_sessionmaker`の接続時フックで
   `PRAGMA journal_mode=WAL`・`PRAGMA busy_timeout=30000`・`PRAGMA synchronous=NORMAL`を
   設定している。既定のジャーナルモード（DELETE）は書き込み中に読み取りもブロックするため、

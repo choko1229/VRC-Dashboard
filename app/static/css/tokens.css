@@ -1,4 +1,10 @@
-/* デザイントークン: フォント・カラー・スペーシング・タイプスケール・角丸スケール */
+/* デザイントークン: フォント・カラー・スペーシング・タイプスケール・角丸スケール
+   OpenSeaスタイルリファレンス(docs/DESIGN.md)準拠。
+   - 既存のカテゴリ別カラー(フレンド/アバター/予定/ゲームログ)は残しつつ、
+     ダーク面ではアイスシグナル寄りの落ち着いた彩度に調整する。
+   - 角丸はカード8px・ボタン/タグ/入力4pxの上限に統一する。
+   - シャドウはドロップシャドウではなく1pxの内側リングを基本にする。
+   - ダークを既定テーマとし、data-theme="light" 指定時のみライト配色にする。 */
 
 @font-face {
     font-family: "LINE Seed JP";
@@ -31,6 +37,8 @@
 :root {
     --font-body: "LINE Seed JP", system-ui, sans-serif;
     --font-heading: "LINE Seed JP", system-ui, sans-serif;
+    /* 価格・日時・ID等、桁を揃えたい数値専用のモノスペースフォント */
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
     /* スペーシング（4px基準） */
     --space-1: 4px;
@@ -51,35 +59,42 @@
     --text-2xl: 32px;
     --text-3xl: 40px;
 
-    /* 角丸スケール（丸みを帯びたポップな印象を出すため大きめ） */
-    --radius-sm: 8px;
-    --radius-md: 16px;
-    --radius-lg: 24px;
+    /* 角丸スケール（密度の高いターミナル調UIのため小さめ。カード8px、それ以外4px上限） */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 8px;
     --radius-pill: 999px;
 
-    /* フレンド（青系） */
-    --color-friends-primary: #3B82F6;
-    --color-friends-hover: #2563EB;
-    --color-friends-bg-soft: #EFF6FF;
-    --color-friends-border: #BFDBFE;
+    /* シャドウ: ドロップシャドウではなく1px内側リングを基本にする */
+    --shadow-card: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --shadow-elevated: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.03);
+
+    /* アイスシグナル: リンク・確認バッジ・フォーカスリング用の単色アクセント */
+    --color-ice-signal: #83c3ff;
+
+    /* フレンド（青系。アイスシグナルと同系統の落ち着いた青） */
+    --color-friends-primary: #7CB8F0;
+    --color-friends-hover: #5B9EE0;
+    --color-friends-bg-soft: #16233A;
+    --color-friends-border: #2B3A52;
 
     /* アバター（緑系） */
-    --color-avatars-primary: #22C55E;
-    --color-avatars-hover: #16A34A;
-    --color-avatars-bg-soft: #F0FDF4;
-    --color-avatars-border: #BBF7D0;
+    --color-avatars-primary: #7CC99A;
+    --color-avatars-hover: #5FAE81;
+    --color-avatars-bg-soft: #16241C;
+    --color-avatars-border: #2A3D30;
 
     /* 今日の予定（橙系） */
-    --color-schedule-primary: #F97316;
-    --color-schedule-hover: #EA580C;
-    --color-schedule-bg-soft: #FFF7ED;
-    --color-schedule-border: #FED7AA;
+    --color-schedule-primary: #D9975F;
+    --color-schedule-hover: #C27E45;
+    --color-schedule-bg-soft: #2A2018;
+    --color-schedule-border: #3D2E20;
 
     /* ゲームログ（紫系） */
-    --color-gamelog-primary: #8B5CF6;
-    --color-gamelog-hover: #7C3AED;
-    --color-gamelog-bg-soft: #F5F3FF;
-    --color-gamelog-border: #DDD6FE;
+    --color-gamelog-primary: #A79BD0;
+    --color-gamelog-hover: #8C7DBE;
+    --color-gamelog-bg-soft: #211D30;
+    --color-gamelog-border: #332C49;
 
     /* VRChatフレンドステータス色（公式アプリ準拠、テーマカラーとは独立） */
     --color-status-online: #3BA55D;
@@ -88,68 +103,51 @@
     --color-status-busy: #EF4444;
     --color-status-offline: #8B8B8B;
 
-    /* 汎用背景・文字色（ライトモード） */
+    /* 汎用背景・文字色（ダークを既定にする。5段階の面階調: Void→Obsidian→Charcoal→Graphite→Slate） */
+    --color-void: #080809;
+    --color-obsidian: #141415;
+    --color-charcoal: #1b1d1f;
+    --color-graphite: #26272d;
+    --color-slate: #3c3d40;
+
+    --color-bg: var(--color-void);
+    --color-surface: var(--color-charcoal);
+    --color-surface-raised: var(--color-graphite);
+    --color-surface-hover: var(--color-slate);
+    --color-text: #ffffff;
+    --color-text-muted: #acadae;
+    --color-border: #34353c;
+}
+
+:root[data-theme="light"] {
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06);
+    --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.08);
+
+    --color-friends-primary: #3B82F6;
+    --color-friends-hover: #2563EB;
+    --color-friends-bg-soft: #EFF6FF;
+    --color-friends-border: #BFDBFE;
+
+    --color-avatars-primary: #22C55E;
+    --color-avatars-hover: #16A34A;
+    --color-avatars-bg-soft: #F0FDF4;
+    --color-avatars-border: #BBF7D0;
+
+    --color-schedule-primary: #F97316;
+    --color-schedule-hover: #EA580C;
+    --color-schedule-bg-soft: #FFF7ED;
+    --color-schedule-border: #FED7AA;
+
+    --color-gamelog-primary: #8B5CF6;
+    --color-gamelog-hover: #7C3AED;
+    --color-gamelog-bg-soft: #F5F3FF;
+    --color-gamelog-border: #DDD6FE;
+
     --color-bg: #FAFAFA;
     --color-surface: #FFFFFF;
+    --color-surface-raised: #FFFFFF;
+    --color-surface-hover: #F3F4F6;
     --color-text: #1F2937;
     --color-text-muted: #6B7280;
     --color-border: #E5E7EB;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-        --color-friends-primary: #60A5FA;
-        --color-friends-hover: #3B82F6;
-        --color-friends-bg-soft: #1E3A5F;
-        --color-friends-border: #1E40AF;
-
-        --color-avatars-primary: #4ADE80;
-        --color-avatars-hover: #22C55E;
-        --color-avatars-bg-soft: #14361F;
-        --color-avatars-border: #166534;
-
-        --color-schedule-primary: #FB923C;
-        --color-schedule-hover: #F97316;
-        --color-schedule-bg-soft: #3A2312;
-        --color-schedule-border: #9A3412;
-
-        --color-gamelog-primary: #A78BFA;
-        --color-gamelog-hover: #8B5CF6;
-        --color-gamelog-bg-soft: #2E1F52;
-        --color-gamelog-border: #5B21B6;
-
-        --color-bg: #111827;
-        --color-surface: #1F2937;
-        --color-text: #F3F4F6;
-        --color-text-muted: #9CA3AF;
-        --color-border: #374151;
-    }
-}
-
-:root[data-theme="dark"] {
-    --color-friends-primary: #60A5FA;
-    --color-friends-hover: #3B82F6;
-    --color-friends-bg-soft: #1E3A5F;
-    --color-friends-border: #1E40AF;
-
-    --color-avatars-primary: #4ADE80;
-    --color-avatars-hover: #22C55E;
-    --color-avatars-bg-soft: #14361F;
-    --color-avatars-border: #166534;
-
-    --color-schedule-primary: #FB923C;
-    --color-schedule-hover: #F97316;
-    --color-schedule-bg-soft: #3A2312;
-    --color-schedule-border: #9A3412;
-
-    --color-gamelog-primary: #A78BFA;
-    --color-gamelog-hover: #8B5CF6;
-    --color-gamelog-bg-soft: #2E1F52;
-    --color-gamelog-border: #5B21B6;
-
-    --color-bg: #111827;
-    --color-surface: #1F2937;
-    --color-text: #F3F4F6;
-    --color-text-muted: #9CA3AF;
-    --color-border: #374151;
 }

@@ -120,7 +120,7 @@ textarea:focus {
     align-items: center;
     gap: var(--space-1);
     padding: var(--space-3) var(--space-5);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     border: none;
     background-color: var(--color-surface);
     color: var(--color-text);
@@ -128,12 +128,12 @@ textarea:focus {
     font-size: var(--text-base);
     cursor: pointer;
     transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-card);
 }
 
 .btn:hover {
     transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-elevated);
 }
 
 .btn-discord {
@@ -151,6 +151,7 @@ textarea:focus {
     border-radius: var(--radius-md);
     padding: var(--space-3);
     word-break: break-all;
+    font-family: var(--font-mono);
     font-size: var(--text-sm);
 }
 
@@ -168,7 +169,7 @@ textarea:focus {
     background-color: var(--color-surface);
     border-radius: var(--radius-lg);
     text-align: center;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-elevated);
 }
 
 .dashboard-header {
@@ -191,6 +192,7 @@ textarea:focus {
     border-radius: var(--radius-lg);
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-card);
     transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -307,6 +309,7 @@ textarea:focus {
     border-radius: var(--radius-lg);
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-card);
     text-decoration: none;
     color: var(--color-text);
     overflow: hidden;
@@ -421,10 +424,10 @@ textarea:focus {
     max-width: 860px;
     max-height: 90vh;
     overflow-y: auto;
-    background-color: var(--color-surface);
+    background-color: var(--color-surface-raised);
     border-radius: var(--radius-lg);
     padding: var(--space-6);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-elevated);
 }
 
 .modal-close-btn {
@@ -584,6 +587,7 @@ textarea:focus {
 }
 
 .activity-heatmap-hour-label {
+    font-family: var(--font-mono);
     font-size: 10px;
     color: var(--color-text-muted);
     text-align: center;
@@ -605,6 +609,7 @@ textarea:focus {
     background-color: var(--color-bg);
     border-radius: var(--radius-md);
     padding: var(--space-4);
+    font-family: var(--font-mono);
     font-size: var(--text-xs);
     overflow-x: auto;
     white-space: pre-wrap;
@@ -650,6 +655,7 @@ textarea:focus {
     border-radius: var(--radius-lg);
     background-color: var(--color-avatars-bg-soft);
     border: 1px solid var(--color-avatars-border);
+    box-shadow: var(--shadow-card);
     text-decoration: none;
     color: var(--color-text);
     transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -690,7 +696,7 @@ textarea:focus {
 .tag-chip {
     display: inline-block;
     padding: 2px var(--space-2);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     background-color: var(--color-avatars-primary);
     color: #fff;
     font-size: var(--text-xs);
@@ -760,6 +766,7 @@ textarea:focus {
 
 .calendar-day-number {
     display: block;
+    font-family: var(--font-mono);
     font-weight: 700;
     margin-bottom: var(--space-1);
 }
@@ -783,6 +790,7 @@ textarea:focus {
     border-radius: var(--radius-lg);
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-card);
 }
 
 .event-list {
@@ -820,7 +828,7 @@ textarea:focus {
     flex-direction: column;
     gap: var(--space-5);
     padding: var(--space-5) var(--space-3);
-    background-color: var(--color-surface);
+    background-color: var(--color-surface-raised);
     border-right: 1px solid var(--color-border);
     position: sticky;
     top: 0;
@@ -900,7 +908,7 @@ textarea:focus {
 }
 
 .icon-btn:hover {
-    background-color: var(--color-bg);
+    background-color: var(--color-surface-hover);
     color: var(--color-text);
     transform: scale(1.1) rotate(-8deg);
 }
@@ -913,7 +921,7 @@ textarea:focus {
 /* 右サイドバー: 常時表示のオンラインフレンド一覧 */
 .app-friends-sidebar {
     padding: var(--space-5) var(--space-4);
-    background-color: var(--color-surface);
+    background-color: var(--color-surface-raised);
     border-left: 1px solid var(--color-border);
     position: sticky;
     top: 0;
@@ -1157,6 +1165,7 @@ textarea:focus {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background-color: var(--color-surface);
+    box-shadow: var(--shadow-card);
     padding: var(--space-2) var(--space-4);
 }
 
@@ -1235,6 +1244,7 @@ textarea:focus {
 }
 
 .gamelog-event-time {
+    font-family: var(--font-mono);
     color: var(--color-text-muted);
     min-width: 6.5em;
 }
@@ -1244,7 +1254,7 @@ textarea:focus {
     align-items: center;
     gap: 4px;
     padding: 2px var(--space-2);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     font-size: var(--text-xs);
     white-space: nowrap;
 }
@@ -1294,7 +1304,7 @@ textarea:focus {
     background-color: var(--color-surface);
     color: var(--color-text-muted);
     padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     font-size: var(--text-sm);
     cursor: pointer;
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
@@ -1369,6 +1379,7 @@ textarea:focus {
 }
 
 .feed-cell-date {
+    font-family: var(--font-mono);
     color: var(--color-text-muted);
     white-space: nowrap;
 }
@@ -1376,7 +1387,7 @@ textarea:focus {
 .feed-type-badge {
     display: inline-block;
     padding: 2px var(--space-2);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     font-size: var(--text-xs);
     white-space: nowrap;
     background-color: var(--color-friends-bg-soft);
@@ -1535,6 +1546,7 @@ textarea:focus {
 }
 
 .notification-cell-date {
+    font-family: var(--font-mono);
     color: var(--color-text-muted);
     white-space: nowrap;
 }
@@ -1542,7 +1554,7 @@ textarea:focus {
 .notification-type-badge {
     display: inline-block;
     padding: 2px var(--space-2);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     font-size: var(--text-xs);
     white-space: nowrap;
     background-color: var(--color-friends-bg-soft);
@@ -1683,7 +1695,7 @@ textarea:focus {
     background-color: var(--color-surface);
     color: var(--color-text-muted);
     padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     font-size: var(--text-sm);
     cursor: pointer;
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
@@ -1780,13 +1792,14 @@ textarea:focus {
 
 .avatar-table-cell-platform,
 .avatar-table-cell-date {
+    font-family: var(--font-mono);
     color: var(--color-text-muted);
 }
 
 .avatar-visibility-badge {
     display: inline-block;
     padding: 2px var(--space-2);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     font-size: var(--text-xs);
     white-space: nowrap;
 }
@@ -1841,9 +1854,9 @@ textarea:focus {
     min-width: 180px;
     padding: var(--space-1);
     border-radius: var(--radius-md);
-    background-color: var(--color-surface);
+    background-color: var(--color-surface-raised);
     border: 1px solid var(--color-border);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-elevated);
 }
 
 .avatar-row-menu-list a,
@@ -1885,6 +1898,7 @@ textarea:focus {
     border-radius: var(--radius-lg);
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-card);
 }
 
 .stats-summary-value {
