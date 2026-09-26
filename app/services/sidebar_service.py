@@ -31,7 +31,7 @@ class SidebarFriendGroups:
     offline: list[Friend] = field(default_factory=list)
 
 
-async def get_friend_sidebar_groups(db: AsyncSession) -> SidebarFriendGroups:
+async def get_friend_sidebar_groups(db: AsyncSession, user_id: int) -> SidebarFriendGroups:
     # 上限に達する場合でもオンライン/アクティブが優先的に残るよう並べ替えてから切り詰める。
     online_state_priority = case(
         (Friend.online_state == "online", 0),
@@ -40,6 +40,7 @@ async def get_friend_sidebar_groups(db: AsyncSession) -> SidebarFriendGroups:
     )
     result = await db.execute(
         select(Friend)
+        .where(Friend.dashboard_user_id == user_id)
         .order_by(online_state_priority, Friend.display_name)
         .limit(_SIDEBAR_FRIEND_LIMIT)
     )

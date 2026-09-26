@@ -1,6 +1,7 @@
 """VRChatへのログインセッション（authCookie/twoFactorAuthCookie）。
 
-アプリ運用上は単一の有効な行のみを想定する（単一ユーザー前提のダッシュボードのため）。
+ダッシュボードユーザー（Discordアカウント）ごとに高々1行の有効なセッションを持つ
+（複数人利用のため、各ユーザーが自分のVRChatアカウントでログインする）。
 トークン本体はアプリ層でFernet暗号化してから保存する（app.core.security.SecretCipher）。
 """
 
@@ -8,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -18,6 +19,11 @@ class VRChatSession(Base):
     __tablename__ = "vrchat_session"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # 所有者（どのダッシュボードユーザーのVRChatアカウントのデータか）。複数人利用に対応するため、
+    # ユーザー単位のデータは全てこの列で分離する。
+    dashboard_user_id: Mapped[int] = mapped_column(
+        ForeignKey("dashboard_user.id", ondelete="CASCADE"), index=True
+    )
     vrchat_user_id: Mapped[str] = mapped_column(String(64))
     vrchat_display_name: Mapped[str] = mapped_column(String(100))
     auth_cookie_encrypted: Mapped[str] = mapped_column()

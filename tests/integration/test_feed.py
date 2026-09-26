@@ -8,24 +8,13 @@ from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.deps import get_current_user
-from app.models.dashboard_user import DashboardUser
 from app.models.friend import Friend
 from app.models.friend_presence_event import FriendPresenceEvent
+from tests.fakes import login_as
 
 
 def _log_in(fastapi_app: FastAPI) -> None:
-    async def fake_current_user() -> DashboardUser:
-        return DashboardUser(
-            id=1,
-            discord_user_id="123456789012345678",
-            discord_username="tester",
-            is_admin=False,
-            first_login_at=datetime.now(UTC),
-            last_login_at=datetime.now(UTC),
-        )
-
-    fastapi_app.dependency_overrides[get_current_user] = fake_current_user
+    login_as(fastapi_app, user_id=1)
 
 
 async def test_feed_requires_login(client: AsyncClient) -> None:
@@ -40,7 +29,7 @@ async def test_feed_page_renders_entries(
 ) -> None:
     _log_in(fastapi_app)
     async with db_session_factory() as db:
-        friend = Friend(vrchat_user_id="usr_a", display_name="Alice")
+        friend = Friend(dashboard_user_id=1, vrchat_user_id="usr_a", display_name="Alice")
         db.add(friend)
         await db.commit()
         await db.refresh(friend)
@@ -69,7 +58,7 @@ async def test_feed_rows_filters_by_event_type(
 ) -> None:
     _log_in(fastapi_app)
     async with db_session_factory() as db:
-        friend = Friend(vrchat_user_id="usr_a", display_name="Alice")
+        friend = Friend(dashboard_user_id=1, vrchat_user_id="usr_a", display_name="Alice")
         db.add(friend)
         await db.commit()
         await db.refresh(friend)
@@ -95,7 +84,7 @@ async def test_feed_status_change_shows_transition_dots(
 ) -> None:
     _log_in(fastapi_app)
     async with db_session_factory() as db:
-        friend = Friend(vrchat_user_id="usr_a", display_name="Alice")
+        friend = Friend(dashboard_user_id=1, vrchat_user_id="usr_a", display_name="Alice")
         db.add(friend)
         await db.commit()
         await db.refresh(friend)

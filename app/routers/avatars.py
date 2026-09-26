@@ -11,24 +11,24 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.core.deps import get_cipher, get_current_user
+from app.core.deps import get_cipher, get_current_vrchat_user
 from app.core.security import SecretCipher
 from app.core.templating import templates
 from app.db.session import get_db
 from app.models.avatar import Avatar
 from app.models.avatar_tag import AvatarTag
+from app.models.dashboard_user import DashboardUser
 from app.models.tag import Tag
 from app.services import (
-    app_config_service,
     avatars_service,
     vrchat_session_service,
     vrchat_sync_service,
 )
-from app.services.vrchat.client import VRChatAPIError, VRChatClient
+from app.services.vrchat.client import VRChatAPIError
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/avatars", dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/avatars", dependencies=[Depends(get_current_vrchat_user)])
 
 _SORT_KEYS: dict[str, Callable[[Avatar], object]] = {
     "name": lambda a: a.name.lower(),
@@ -57,6 +57,7 @@ def _parse_tag_id(raw: str | None) -> int | None:
 
 async def _fetch_avatars(
     db: AsyncSession,
+    user_id: int,
     *,
     tag_id: int | None,
     release_status: str,
@@ -65,7 +66,7 @@ async def _fetch_avatars(
     sort_by: str,
     sort_dir: str,
 ) -> list[Avatar]:
-    query = select(Avatar)
+    query = select(Avatar).where(Avatar.dashboard_user_id == user_id)
     if tag_id is not None:
         query = query.join(AvatarTag, AvatarTag.avatar_id == Avatar.id).where(
             AvatarTag.tag_id == tag_id
@@ -85,11 +86,6 @@ async def _fetch_avatars(
     return avatars
 
 
-async def _fetch_tags(db: AsyncSession) -> list[Tag]:
-    result = await db.execute(select(Tag).order_by(Tag.name))
-    return list(result.scalars().all())
-
-
 async def _fetch_avatar_tags_map(db: AsyncSession, avatar_ids: list[int]) -> dict[int, list[Tag]]:
     if not avatar_ids:
         return {}
@@ -104,17 +100,6 @@ async def _fetch_avatar_tags_map(db: AsyncSession, avatar_ids: list[int]) -> dic
     return mapping
 
 
-async def _build_client(db: AsyncSession, cipher: SecretCipher) -> VRChatClient | None:
-    cookies = await vrchat_session_service.get_decrypted_cookies(db, cipher)
-    if cookies is None:
-        return None
-    auth_cookie, two_factor_cookie = cookies
-    user_agent = await app_config_service.get_vrchat_user_agent(db)
-    return VRChatClient(
-        user_agent=user_agent, auth_cookie=auth_cookie, two_factor_cookie=two_factor_cookie
-    )
-
-
 @router.get("", response_class=HTMLResponse)
 async def avatars_page(
     request: Request,
@@ -125,10 +110,12 @@ async def avatars_page(
     sort_by: str = "name",
     sort_dir: str = "asc",
     db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
     parsed_tag_id = _parse_tag_id(tag_id)
     avatars = await _fetch_avatars(
         db,
+        user.id,
         tag_id=parsed_tag_id,
         release_status=release_status,
         platform=platform,
@@ -136,7 +123,7 @@ async def avatars_page(
         sort_by=sort_by,
         sort_dir=sort_dir,
     )
-    tags = await _fetch_tags(db)
+    tags = await avatars_service.list_tags(db, user.id)
     avatar_tags_map = await _fetch_avatar_tags_map(db, [a.id for a in avatars])
     return templates.TemplateResponse(
         request,
@@ -165,10 +152,12 @@ async def avatars_list_partial(
     sort_by: str = "name",
     sort_dir: str = "asc",
     db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
     parsed_tag_id = _parse_tag_id(tag_id)
     avatars = await _fetch_avatars(
         db,
+        user.id,
         tag_id=parsed_tag_id,
         release_status=release_status,
         platform=platform,
@@ -195,12 +184,15 @@ async def avatars_list_partial(
 
 @router.get("/{avatar_id}", response_class=HTMLResponse)
 async def avatar_detail_page(
-    request: Request, avatar_id: int, db: AsyncSession = Depends(get_db)
+    request: Request,
+    avatar_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    avatar = await db.get(Avatar, avatar_id)
+    avatar = await avatars_service.get_avatar(db, user.id, avatar_id)
     if avatar is None:
         return templates.TemplateResponse(request, "avatars/not_found.html", status_code=404)
-    tags = await _fetch_tags(db)
+    tags = await avatars_service.list_tags(db, user.id)
     avatar_tag_ids = await avatars_service.get_avatar_tag_ids(db, avatar_id)
     return templates.TemplateResponse(
         request,
@@ -211,9 +203,13 @@ async def avatar_detail_page(
 
 @router.patch("/{avatar_id}/notes", response_class=HTMLResponse)
 async def update_avatar_notes(
-    request: Request, avatar_id: int, notes: str = Form(""), db: AsyncSession = Depends(get_db)
+    request: Request,
+    avatar_id: int,
+    notes: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    avatar = await avatars_service.update_notes(db, avatar_id, notes)
+    avatar = await avatars_service.update_notes(db, user.id, avatar_id, notes)
     return templates.TemplateResponse(request, "avatars/_notes_form.html", {"avatar": avatar})
 
 
@@ -223,9 +219,10 @@ async def attach_tag(
     avatar_id: int,
     tag_id: int = Form(...),
     db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    await avatars_service.add_tag_to_avatar(db, avatar_id, tag_id)
-    tags = await _fetch_tags(db)
+    await avatars_service.add_tag_to_avatar(db, user.id, avatar_id, tag_id)
+    tags = await avatars_service.list_tags(db, user.id)
     avatar_tag_ids = await avatars_service.get_avatar_tag_ids(db, avatar_id)
     return templates.TemplateResponse(
         request,
@@ -236,10 +233,14 @@ async def attach_tag(
 
 @router.delete("/{avatar_id}/tags/{tag_id}", response_class=HTMLResponse)
 async def detach_tag(
-    request: Request, avatar_id: int, tag_id: int, db: AsyncSession = Depends(get_db)
+    request: Request,
+    avatar_id: int,
+    tag_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    await avatars_service.remove_tag_from_avatar(db, avatar_id, tag_id)
-    tags = await _fetch_tags(db)
+    await avatars_service.remove_tag_from_avatar(db, user.id, avatar_id, tag_id)
+    tags = await avatars_service.list_tags(db, user.id)
     avatar_tag_ids = await avatars_service.get_avatar_tag_ids(db, avatar_id)
     return templates.TemplateResponse(
         request,
@@ -249,8 +250,12 @@ async def detach_tag(
 
 
 @router.get("/tags/manage", response_class=HTMLResponse)
-async def manage_tags_page(request: Request, db: AsyncSession = Depends(get_db)) -> HTMLResponse:
-    tags = await _fetch_tags(db)
+async def manage_tags_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
+) -> HTMLResponse:
+    tags = await avatars_service.list_tags(db, user.id)
     return templates.TemplateResponse(request, "avatars/tags.html", {"tags": tags})
 
 
@@ -260,25 +265,29 @@ async def create_tag(
     name: str = Form(...),
     color: str = Form(""),
     db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    await avatars_service.create_tag(db, name, color or None)
-    tags = await _fetch_tags(db)
+    await avatars_service.create_tag(db, user.id, name, color or None)
+    tags = await avatars_service.list_tags(db, user.id)
     return templates.TemplateResponse(request, "avatars/_tags_list.html", {"tags": tags})
 
 
 @router.delete("/tags/{tag_id}", response_class=HTMLResponse)
 async def delete_tag(
-    request: Request, tag_id: int, db: AsyncSession = Depends(get_db)
+    request: Request,
+    tag_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    await avatars_service.delete_tag(db, tag_id)
-    tags = await _fetch_tags(db)
+    await avatars_service.delete_tag(db, user.id, tag_id)
+    tags = await avatars_service.list_tags(db, user.id)
     return templates.TemplateResponse(request, "avatars/_tags_list.html", {"tags": tags})
 
 
 async def _render_row(
-    request: Request, db: AsyncSession, avatar_id: int, *, error: str | None = None
+    request: Request, db: AsyncSession, user_id: int, avatar_id: int, *, error: str | None = None
 ) -> HTMLResponse:
-    avatar = await db.get(Avatar, avatar_id)
+    avatar = await avatars_service.get_avatar(db, user_id, avatar_id)
     if avatar is None:
         return HTMLResponse("", status_code=404)
     tags_map = await _fetch_avatar_tags_map(db, [avatar_id])
@@ -296,28 +305,33 @@ async def rename_avatar(
     name: str = Form(...),
     db: AsyncSession = Depends(get_db),
     cipher: SecretCipher = Depends(get_cipher),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
     """アバター名をVRChat側に反映する（実際のアバターデータを書き換える）。"""
-    avatar = await db.get(Avatar, avatar_id)
+    avatar = await avatars_service.get_avatar(db, user.id, avatar_id)
     if avatar is None:
         return HTMLResponse("", status_code=404)
     name = name.strip()
     if not name:
-        return await _render_row(request, db, avatar_id, error="名前を空にはできません。")
+        return await _render_row(request, db, user.id, avatar_id, error="名前を空にはできません。")
 
-    client = await _build_client(db, cipher)
+    client = await vrchat_session_service.build_client(db, cipher, user.id)
     if client is None:
-        return await _render_row(request, db, avatar_id, error="VRChatと連携していません。")
+        return await _render_row(
+            request, db, user.id, avatar_id, error="VRChatと連携していません。"
+        )
     try:
         await client.update_avatar(avatar.vrchat_avatar_id, name=name)
     except VRChatAPIError as exc:
         logger.warning("アバター名の更新に失敗しました: %s", exc)
-        return await _render_row(request, db, avatar_id, error=f"更新に失敗しました: {exc}")
+        return await _render_row(
+            request, db, user.id, avatar_id, error=f"更新に失敗しました: {exc}"
+        )
     finally:
         await client.close()
 
-    await avatars_service.update_avatar_fields(db, avatar_id, name=name)
-    return await _render_row(request, db, avatar_id)
+    await avatars_service.update_avatar_fields(db, user.id, avatar_id, name=name)
+    return await _render_row(request, db, user.id, avatar_id)
 
 
 @router.post("/{avatar_id}/description", response_class=HTMLResponse)
@@ -327,25 +341,30 @@ async def update_avatar_description(
     description: str = Form(""),
     db: AsyncSession = Depends(get_db),
     cipher: SecretCipher = Depends(get_cipher),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
     """アバターの説明文をVRChat側に反映する（実際のアバターデータを書き換える）。"""
-    avatar = await db.get(Avatar, avatar_id)
+    avatar = await avatars_service.get_avatar(db, user.id, avatar_id)
     if avatar is None:
         return HTMLResponse("", status_code=404)
 
-    client = await _build_client(db, cipher)
+    client = await vrchat_session_service.build_client(db, cipher, user.id)
     if client is None:
-        return await _render_row(request, db, avatar_id, error="VRChatと連携していません。")
+        return await _render_row(
+            request, db, user.id, avatar_id, error="VRChatと連携していません。"
+        )
     try:
         await client.update_avatar(avatar.vrchat_avatar_id, description=description)
     except VRChatAPIError as exc:
         logger.warning("アバター説明の更新に失敗しました: %s", exc)
-        return await _render_row(request, db, avatar_id, error=f"更新に失敗しました: {exc}")
+        return await _render_row(
+            request, db, user.id, avatar_id, error=f"更新に失敗しました: {exc}"
+        )
     finally:
         await client.close()
 
-    await avatars_service.update_avatar_fields(db, avatar_id, description=description)
-    return await _render_row(request, db, avatar_id)
+    await avatars_service.update_avatar_fields(db, user.id, avatar_id, description=description)
+    return await _render_row(request, db, user.id, avatar_id)
 
 
 @router.post("/{avatar_id}/release-status", response_class=HTMLResponse)
@@ -355,27 +374,34 @@ async def update_avatar_release_status(
     release_status: str = Form(...),
     db: AsyncSession = Depends(get_db),
     cipher: SecretCipher = Depends(get_cipher),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
     """アバターの公開/非公開状態をVRChat側に反映する（実際のアバターデータを書き換える）。"""
     if release_status not in ("public", "private"):
         return HTMLResponse("", status_code=400)
-    avatar = await db.get(Avatar, avatar_id)
+    avatar = await avatars_service.get_avatar(db, user.id, avatar_id)
     if avatar is None:
         return HTMLResponse("", status_code=404)
 
-    client = await _build_client(db, cipher)
+    client = await vrchat_session_service.build_client(db, cipher, user.id)
     if client is None:
-        return await _render_row(request, db, avatar_id, error="VRChatと連携していません。")
+        return await _render_row(
+            request, db, user.id, avatar_id, error="VRChatと連携していません。"
+        )
     try:
         await client.update_avatar(avatar.vrchat_avatar_id, release_status=release_status)
     except VRChatAPIError as exc:
         logger.warning("アバター公開状態の更新に失敗しました: %s", exc)
-        return await _render_row(request, db, avatar_id, error=f"更新に失敗しました: {exc}")
+        return await _render_row(
+            request, db, user.id, avatar_id, error=f"更新に失敗しました: {exc}"
+        )
     finally:
         await client.close()
 
-    await avatars_service.update_avatar_fields(db, avatar_id, release_status=release_status)
-    return await _render_row(request, db, avatar_id)
+    await avatars_service.update_avatar_fields(
+        db, user.id, avatar_id, release_status=release_status
+    )
+    return await _render_row(request, db, user.id, avatar_id)
 
 
 @router.post("/sync", response_class=HTMLResponse)
@@ -383,24 +409,18 @@ async def manual_sync(
     request: Request,
     db: AsyncSession = Depends(get_db),
     cipher: SecretCipher = Depends(get_cipher),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    cookies = await vrchat_session_service.get_decrypted_cookies(db, cipher)
-    if cookies is None:
+    client = await vrchat_session_service.build_client(db, cipher, user.id)
+    if client is None:
         return templates.TemplateResponse(
             request,
             "avatars/_sync_result.html",
             {"success": False, "message": "VRChatと連携していません。"},
         )
 
-    auth_cookie, two_factor_cookie = cookies
-    user_agent = await app_config_service.get_vrchat_user_agent(db)
-    client = VRChatClient(
-        user_agent=user_agent,
-        auth_cookie=auth_cookie,
-        two_factor_cookie=two_factor_cookie,
-    )
     try:
-        await vrchat_sync_service.full_avatars_sync(db, client)
+        await vrchat_sync_service.full_avatars_sync(db, user.id, client)
     except VRChatAPIError as exc:
         return templates.TemplateResponse(
             request,

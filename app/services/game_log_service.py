@@ -47,7 +47,7 @@ class _InstanceVisit:
 
 
 async def get_friend_co_presence_stats(
-    db: AsyncSession, vrchat_user_ids: list[str]
+    db: AsyncSession, user_id: int, vrchat_user_ids: list[str]
 ) -> dict[str, CoPresenceStats]:
     """フレンドごとの「一緒に居たインスタンス数」「一緒に居た合計時間」をゲームログから概算する。
 
@@ -71,16 +71,17 @@ async def get_friend_co_presence_stats(
             )
             .join(GameLogInstance, GameLogEvent.instance_id == GameLogInstance.id)
             .where(
+                GameLogInstance.dashboard_user_id == user_id,
                 GameLogEvent.player_vrchat_user_id.in_(vrchat_user_ids),
                 GameLogEvent.event_type.in_(("player_join", "player_leave")),
             )
         )
     ).all()
 
-    # (instance_id, user_id) -> 自分の滞在期間 + そのフレンドのjoin/leave時刻一覧
+    # (instance_id, フレンドのvrchat_user_id) -> 自分の滞在期間 + そのフレンドのjoin/leave時刻一覧
     visits: dict[tuple[int, str], _InstanceVisit] = {}
-    for instance_id, user_id, event_type, occurred_at, my_joined_at, my_left_at in rows:
-        key = (instance_id, user_id)
+    for instance_id, friend_user_id, event_type, occurred_at, my_joined_at, my_left_at in rows:
+        key = (instance_id, friend_user_id)
         visit = visits.setdefault(
             key, _InstanceVisit(my_joined_at=my_joined_at, my_left_at=my_left_at)
         )
@@ -89,7 +90,7 @@ async def get_friend_co_presence_stats(
 
     now = datetime.now(UTC)
     stats: dict[str, CoPresenceStats] = defaultdict(lambda: CoPresenceStats(0, 0.0))
-    for (_instance_id, user_id), visit in visits.items():
+    for (_instance_id, friend_user_id), visit in visits.items():
         if not visit.friend_joins:
             continue
 
@@ -98,7 +99,7 @@ async def get_friend_co_presence_stats(
         friend_end = _aware(max(visit.friend_leaves)) if visit.friend_leaves else my_end
         end = min(friend_end, my_end)
 
-        stat = stats[user_id]
+        stat = stats[friend_user_id]
         stat.join_count += 1
         if end > start:
             stat.together_seconds += (end - start).total_seconds()
@@ -115,25 +116,25 @@ class GameLogInstanceSummary:
     duration_label: str
 
 
-async def _get_open_instance(db: AsyncSession) -> GameLogInstance | None:
+async def _get_open_instance(db: AsyncSession, user_id: int) -> GameLogInstance | None:
     result = await db.execute(
         select(GameLogInstance)
-        .where(GameLogInstance.left_at.is_(None))
+        .where(GameLogInstance.dashboard_user_id == user_id, GameLogInstance.left_at.is_(None))
         .order_by(GameLogInstance.joined_at.desc())
         .limit(1)
     )
     return result.scalars().first()
 
 
-async def ingest_events(db: AsyncSession, events: list[GameLogEventIn]) -> None:
-    """ローカルエージェントから送られてきたイベントを取り込む。
+async def ingest_events(db: AsyncSession, user_id: int, events: list[GameLogEventIn]) -> None:
+    """ローカルエージェントから送られてきたイベントを、そのエージェントの所有者のログとして取り込む。
 
-    「現在滞在中のインスタンス」はDB上に高々1件（left_atがNULLの行）だけ存在する想定で、
+    「現在滞在中のインスタンス」はユーザーごとにDB上に高々1件（left_atがNULLの行）だけ存在する想定で、
     instance_joinで前のインスタンスを閉じて新規行を作り、instance_leaveで閉じ、
     それ以外のイベントは現在開いているインスタンスに紐づける。
     受信順ではなくoccurred_at昇順で処理することで、バッチ送信時の順序ゆらぎに対応する。
     """
-    current_instance = await _get_open_instance(db)
+    current_instance = await _get_open_instance(db, user_id)
 
     for event in sorted(events, key=lambda e: e.occurred_at):
         if event.event_type == "instance_join":
@@ -143,6 +144,7 @@ async def ingest_events(db: AsyncSession, events: list[GameLogEventIn]) -> None:
             if current_instance is not None and current_instance.left_at is None:
                 current_instance.left_at = event.occurred_at
             current_instance = GameLogInstance(
+                dashboard_user_id=user_id,
                 location=event.location,
                 world_id=event.world_id,
                 world_name=event.world_name,
@@ -189,11 +191,12 @@ def _format_duration(joined_at: datetime, left_at: datetime | None, *, now: date
 
 
 async def get_instance_summaries(
-    db: AsyncSession, *, page: int = 0
+    db: AsyncSession, user_id: int, *, page: int = 0
 ) -> tuple[list[GameLogInstanceSummary], bool]:
     """インスタンス訪問履歴を新しい順にページ取得する。(結果, 次ページの有無) を返す。"""
     result = await db.execute(
         select(GameLogInstance)
+        .where(GameLogInstance.dashboard_user_id == user_id)
         .order_by(GameLogInstance.joined_at.desc())
         .offset(page * _PAGE_SIZE)
         .limit(_PAGE_SIZE + 1)
@@ -217,7 +220,7 @@ async def get_instance_summaries(
         for instance_id, event_type, count in counts_result.all()
     }
 
-    now = await game_log_agent_token_service.get_effective_now(db)
+    now = await game_log_agent_token_service.get_effective_now(db, user_id)
     summaries = [
         GameLogInstanceSummary(
             instance=instance,
@@ -231,10 +234,16 @@ async def get_instance_summaries(
     return summaries, has_more
 
 
-async def get_instance_events(db: AsyncSession, instance_id: int) -> list[GameLogEvent]:
+async def get_instance_events(
+    db: AsyncSession, user_id: int, instance_id: int
+) -> list[GameLogEvent]:
     result = await db.execute(
         select(GameLogEvent)
-        .where(GameLogEvent.instance_id == instance_id)
+        .join(GameLogInstance, GameLogEvent.instance_id == GameLogInstance.id)
+        .where(
+            GameLogEvent.instance_id == instance_id,
+            GameLogInstance.dashboard_user_id == user_id,
+        )
         .order_by(GameLogEvent.occurred_at.desc())
     )
     return list(result.scalars().all())

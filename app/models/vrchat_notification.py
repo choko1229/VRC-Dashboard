@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -18,11 +18,22 @@ from app.db.base import Base
 
 class VRChatNotification(Base):
     __tablename__ = "vrchat_notification"
-    __table_args__ = (Index("ix_vrchat_notification_occurred_at", "occurred_at"),)
+    __table_args__ = (
+        Index("ix_vrchat_notification_occurred_at", "occurred_at"),
+        UniqueConstraint(
+            "dashboard_user_id", "vrchat_notification_id", name="uq_vrchat_notification_owner"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    # VRChat側の通知ID（Pipeline再配信/REST再取込に対してupsertで冪等にするための一意キー）。
-    vrchat_notification_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # 所有者（どのダッシュボードユーザーのVRChatアカウントのデータか）。複数人利用に対応するため、
+    # ユーザー単位のデータは全てこの列で分離する。
+    dashboard_user_id: Mapped[int] = mapped_column(
+        ForeignKey("dashboard_user.id", ondelete="CASCADE"), index=True
+    )
+    # VRChat側の通知ID。Pipeline再配信/REST再取込に対してupsertで冪等にするための
+    # 所有者単位の一意キー。
+    vrchat_notification_id: Mapped[str] = mapped_column(String(64), index=True)
     # 受信元のPipelineイベント種別: notification / notification-v2 / economy-update /
     # group-joined 等。
     pipeline_event: Mapped[str] = mapped_column(String(30))

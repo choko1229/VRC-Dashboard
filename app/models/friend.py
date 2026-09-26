@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -17,9 +17,18 @@ from app.db.base import Base
 
 class Friend(Base):
     __tablename__ = "friend"
+    # 同じVRChatユーザーが複数のダッシュボードユーザーのフレンドであり得るため、所有者単位で一意。
+    __table_args__ = (
+        UniqueConstraint("dashboard_user_id", "vrchat_user_id", name="uq_friend_owner"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    vrchat_user_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # 所有者（どのダッシュボードユーザーのVRChatアカウントのデータか）。複数人利用に対応するため、
+    # ユーザー単位のデータは全てこの列で分離する。
+    dashboard_user_id: Mapped[int] = mapped_column(
+        ForeignKey("dashboard_user.id", ondelete="CASCADE"), index=True
+    )
+    vrchat_user_id: Mapped[str] = mapped_column(String(64), index=True)
     display_name: Mapped[str] = mapped_column(String(100))
     is_online: Mapped[bool] = mapped_column(default=False)
     # VRChatの実際のstatus値: active / join me / ask me / busy / offline（気分ステータス）

@@ -10,11 +10,11 @@ from app.models.sync_cursor import SyncCursor
 
 
 async def mark_synced(
-    db: AsyncSession, resource_name: str, *, success: bool, error: str | None = None
+    db: AsyncSession, user_id: int, resource_name: str, *, success: bool, error: str | None = None
 ) -> None:
-    cursor = await db.get(SyncCursor, resource_name)
+    cursor = await db.get(SyncCursor, (user_id, resource_name))
     if cursor is None:
-        cursor = SyncCursor(resource_name=resource_name)
+        cursor = SyncCursor(dashboard_user_id=user_id, resource_name=resource_name)
         db.add(cursor)
 
     cursor.last_synced_at = datetime.now(UTC)

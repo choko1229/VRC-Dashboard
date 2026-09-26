@@ -3,6 +3,10 @@
 再接続ポリシー（ユーザー確認済み）:
   初回5秒 → 指数バックオフで最大60秒間隔、リトライ回数無制限、
   連続10回失敗でDiscordへ通知する。
+
+複数人利用に対応するため、VRChatにログインしているダッシュボードユーザーごとに
+1本ずつ接続を持つ（PipelineManagerが1ユーザー分、PipelineRegistryが全ユーザー分を管理する）。
+受信したイベントは、その接続の所有者のデータとしてDBへ反映する。
 """
 
 from __future__ import annotations
@@ -22,17 +26,21 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.notifications.base import NotificationPayload, NotificationSender
 from app.schemas.vrchat import VRChatUser, parse_world_id_from_location
 from app.services import friends_service, vrchat_notification_service, vrchat_session_service
-from app.services.vrchat.client import VRChatClient
+from app.services.vrchat.client import VRChatAuthError, VRChatClient
 
 logger = logging.getLogger(__name__)
 
 _PIPELINE_URL = "wss://pipeline.vrchat.cloud/"
 
-EventHandler = Callable[[AsyncSession, NotificationSender, dict[str, Any]], Awaitable[None]]
+# (db, sender, 接続の所有者のdashboard_user_id, content)
+EventHandler = Callable[
+    [AsyncSession, NotificationSender, int, dict[str, Any]], Awaitable[None]
+]
 NotificationSenderFactory = Callable[[AsyncSession], Awaitable[NotificationSender]]
 AuthCookieProvider = Callable[[], Awaitable[str | None]]
 UserAgentProvider = Callable[[], Awaitable[str]]
 SelfLocationSeeder = Callable[[str, str], Awaitable[None]]
+AuthInvalidHandler = Callable[[], Awaitable[None]]
 
 
 def _extract_world_thumbnail_url(world: Any) -> str | None:
@@ -60,12 +68,12 @@ def _extract_display_name(*candidates: object) -> str | None:
 
 
 async def _on_friend_online(
-    db: AsyncSession, sender: NotificationSender, content: dict[str, Any]
+    db: AsyncSession, sender: NotificationSender, user_id: int, content: dict[str, Any]
 ) -> None:
     raw_user = content.get("user")
     user = raw_user if isinstance(raw_user, dict) else {}
-    user_id = content.get("userId") or user.get("id")
-    if not isinstance(user_id, str):
+    vrchat_user_id = content.get("userId") or user.get("id")
+    if not isinstance(vrchat_user_id, str):
         return
     display_name = _extract_display_name(user.get("displayName"), content.get("displayName"))
     location = content.get("location") or user.get("location")
@@ -75,7 +83,8 @@ async def _on_friend_online(
     await friends_service.handle_friend_online(
         db,
         sender,
-        vrchat_user_id=user_id,
+        user_id,
+        vrchat_user_id=vrchat_user_id,
         display_name=display_name,
         location=location if isinstance(location, str) else None,
         world_name=world_name if isinstance(world_name, str) else None,
@@ -84,35 +93,35 @@ async def _on_friend_online(
 
 
 async def _on_friend_active(
-    db: AsyncSession, sender: NotificationSender, content: dict[str, Any]
+    db: AsyncSession, sender: NotificationSender, user_id: int, content: dict[str, Any]
 ) -> None:
     """接続中だがワールドに滞在していない（Web/メニュー等）状態への遷移。"""
-    user_id = content.get("userId")
-    if not isinstance(user_id, str):
+    vrchat_user_id = content.get("userId")
+    if not isinstance(vrchat_user_id, str):
         return
     display_name = _extract_display_name(content.get("displayName"))
     await friends_service.handle_friend_active(
-        db, sender, vrchat_user_id=user_id, display_name=display_name
+        db, sender, user_id, vrchat_user_id=vrchat_user_id, display_name=display_name
     )
 
 
 async def _on_friend_offline(
-    db: AsyncSession, sender: NotificationSender, content: dict[str, Any]
+    db: AsyncSession, sender: NotificationSender, user_id: int, content: dict[str, Any]
 ) -> None:
-    user_id = content.get("userId")
-    if not isinstance(user_id, str):
+    vrchat_user_id = content.get("userId")
+    if not isinstance(vrchat_user_id, str):
         return
     display_name = _extract_display_name(content.get("displayName"))
     await friends_service.handle_friend_offline(
-        db, sender, vrchat_user_id=user_id, display_name=display_name
+        db, sender, user_id, vrchat_user_id=vrchat_user_id, display_name=display_name
     )
 
 
 async def _on_friend_location(
-    db: AsyncSession, sender: NotificationSender, content: dict[str, Any]
+    db: AsyncSession, sender: NotificationSender, user_id: int, content: dict[str, Any]
 ) -> None:
-    user_id = content.get("userId")
-    if not isinstance(user_id, str):
+    vrchat_user_id = content.get("userId")
+    if not isinstance(vrchat_user_id, str):
         return
     display_name = _extract_display_name(content.get("displayName"))
     location = content.get("location")
@@ -122,7 +131,8 @@ async def _on_friend_location(
     await friends_service.handle_friend_location_change(
         db,
         sender,
-        vrchat_user_id=user_id,
+        user_id,
+        vrchat_user_id=vrchat_user_id,
         display_name=display_name,
         location=location if isinstance(location, str) else None,
         world_name=world_name if isinstance(world_name, str) else None,
@@ -131,7 +141,7 @@ async def _on_friend_location(
 
 
 async def _on_friend_update(
-    db: AsyncSession, _sender: NotificationSender, content: dict[str, Any]
+    db: AsyncSession, _sender: NotificationSender, user_id: int, content: dict[str, Any]
 ) -> None:
     user = content.get("user")
     if not isinstance(user, dict):
@@ -141,11 +151,11 @@ async def _on_friend_update(
     except Exception:
         logger.warning("friend-updateイベントのユーザー情報パースに失敗しました")
         return
-    await friends_service.handle_friend_status_update(db, vrchat_user=vrchat_user)
+    await friends_service.handle_friend_status_update(db, user_id, vrchat_user=vrchat_user)
 
 
 async def _on_user_location(
-    db: AsyncSession, _sender: NotificationSender, content: dict[str, Any]
+    db: AsyncSession, _sender: NotificationSender, user_id: int, content: dict[str, Any]
 ) -> None:
     """自分（操作者）自身の現在地の変化。「同じインスタンス」判定に使う。"""
     location = content.get("location")
@@ -154,6 +164,7 @@ async def _on_user_location(
     location_str = location if isinstance(location, str) else None
     await vrchat_session_service.update_self_location(
         db,
+        user_id,
         location=location_str,
         world_id=parse_world_id_from_location(location_str),
         world_name=world_name if isinstance(world_name, str) else None,
@@ -161,7 +172,12 @@ async def _on_user_location(
 
 
 async def _on_vrchat_notification_event(
-    db: AsyncSession, _sender: NotificationSender, content: dict[str, Any], *, event_type: str
+    db: AsyncSession,
+    _sender: NotificationSender,
+    user_id: int,
+    content: dict[str, Any],
+    *,
+    event_type: str,
 ) -> None:
     """VRChat自体の通知ログ（招待/フレンドリクエスト/グループイベント等）への取込。
 
@@ -169,7 +185,9 @@ async def _on_vrchat_notification_event(
     vrchat_notification_service.ingest()に委譲する（app.services.vrchat_notification_service
     参照。仕様が非公開なイベント種別も多いため、そちらで防御的にパースする）。
     """
-    await vrchat_notification_service.ingest(db, pipeline_event=event_type, content=content)
+    await vrchat_notification_service.ingest(
+        db, user_id, pipeline_event=event_type, content=content
+    )
 
 
 _EVENT_HANDLERS: dict[str, EventHandler] = {
@@ -217,11 +235,16 @@ _EVENT_HANDLERS: dict[str, EventHandler] = {
 
 
 class PipelineManager:
-    """Pipeline接続のライフサイクル（開始/停止/再接続）を管理する。"""
+    """1ダッシュボードユーザー分のPipeline接続のライフサイクル（開始/停止/再接続）を管理する。
+
+    各Provider（auth cookie/UA/通知送信手段）は、このユーザー用に束縛済みのものを受け取る
+    （PipelineRegistry経由で生成する）。
+    """
 
     def __init__(
         self,
         *,
+        dashboard_user_id: int,
         session_factory: async_sessionmaker[AsyncSession],
         notification_sender_factory: NotificationSenderFactory,
         get_auth_cookie: AuthCookieProvider,
@@ -230,12 +253,15 @@ class PipelineManager:
         max_reconnect_seconds: float,
         notify_after_failures: int,
         seed_self_location: SelfLocationSeeder | None = None,
+        on_auth_invalid: AuthInvalidHandler | None = None,
     ) -> None:
+        self._dashboard_user_id = dashboard_user_id
         self._session_factory = session_factory
         self._notification_sender_factory = notification_sender_factory
         self._get_auth_cookie = get_auth_cookie
         self._get_user_agent = get_user_agent
         self._seed_self_location = seed_self_location or self._default_seed_self_location
+        self._on_auth_invalid = on_auth_invalid
         self._initial_reconnect_seconds = initial_reconnect_seconds
         self._max_reconnect_seconds = max_reconnect_seconds
         self._notify_after_failures = notify_after_failures
@@ -251,8 +277,10 @@ class PipelineManager:
         if self.is_running:
             return
         self._consecutive_failures = 0
-        self._task = asyncio.create_task(self._run_forever(), name="vrchat-pipeline")
-        logger.info("Pipelineリスナーを起動しました")
+        self._task = asyncio.create_task(
+            self._run_forever(), name=f"vrchat-pipeline-{self._dashboard_user_id}"
+        )
+        logger.info("Pipelineリスナーを起動しました (user=%d)", self._dashboard_user_id)
 
     async def stop(self) -> None:
         if self._task is None:
@@ -261,7 +289,7 @@ class PipelineManager:
         with contextlib.suppress(asyncio.CancelledError):
             await self._task
         self._task = None
-        logger.info("Pipelineリスナーを停止しました")
+        logger.info("Pipelineリスナーを停止しました (user=%d)", self._dashboard_user_id)
 
     async def _run_forever(self) -> None:
         delay = self._initial_reconnect_seconds
@@ -272,10 +300,21 @@ class PipelineManager:
                 delay = self._initial_reconnect_seconds
             except asyncio.CancelledError:
                 raise
+            except VRChatAuthError:
+                # セッション切れ（401）は再接続しても回復しないため、セッションを無効化して
+                # 接続を諦める。ユーザーは次回ページを開いた際にVRChatへの再ログインを求められる。
+                logger.warning(
+                    "VRChatのセッションが失効しているためPipeline接続を停止します (user=%d)",
+                    self._dashboard_user_id,
+                )
+                if self._on_auth_invalid is not None:
+                    await self._on_auth_invalid()
+                return
             except Exception as exc:  # noqa: BLE001 再接続ループを継続させるため意図的に広く捕捉する
                 self._consecutive_failures += 1
                 logger.warning(
-                    "Pipeline接続でエラーが発生しました（%d回連続、%.0f秒後に再試行）: %s",
+                    "Pipeline接続でエラーが発生しました（user=%d, %d回連続、%.0f秒後に再試行）: %s",
+                    self._dashboard_user_id,
                     self._consecutive_failures,
                     delay,
                     exc,
@@ -314,7 +353,7 @@ class PipelineManager:
         async with websockets.connect(
             url, user_agent_header=user_agent, open_timeout=15, close_timeout=5
         ) as ws:
-            logger.info("VRChat Pipelineに接続しました")
+            logger.info("VRChat Pipelineに接続しました (user=%d)", self._dashboard_user_id)
             async for raw_message in ws:
                 await self._handle_message(raw_message)
 
@@ -325,6 +364,9 @@ class PipelineManager:
         送られない。そのため接続時点で既にどこかのワールドに滞在している場合、
         次にワールドを移動するまでself_locationがNoneのままとなり、サイドバー/
         フレンド一覧の「同じインスタンス」区分が機能しない不具合があった。
+
+        セッション切れ（VRChatAuthError）のみは呼び出し元へ伝播させ、Pipeline接続を停止させる
+        （それ以外の失敗は現在地が補完されないだけのため、接続自体は続行する）。
         """
         client = VRChatClient(user_agent=user_agent, auth_cookie=auth_cookie)
         try:
@@ -334,10 +376,13 @@ class PipelineManager:
             async with self._session_factory() as db:
                 await vrchat_session_service.update_self_location(
                     db,
+                    self._dashboard_user_id,
                     location=current_user.location,
                     world_id=world_id,
                     world_name=world_name,
                 )
+        except VRChatAuthError:
+            raise
         except Exception:
             logger.warning("接続時点の自分の現在地取得に失敗しました", exc_info=True)
         finally:
@@ -373,8 +418,47 @@ class PipelineManager:
         async with self._session_factory() as db:
             sender = await self._notification_sender_factory(db)
             try:
-                await handler(db, sender, content)
+                await handler(db, sender, self._dashboard_user_id, content)
             except Exception:
                 logger.exception(
-                    "Pipelineイベント処理中にエラーが発生しました: type=%s", message_type
+                    "Pipelineイベント処理中にエラーが発生しました: user=%d type=%s",
+                    self._dashboard_user_id,
+                    message_type,
                 )
+
+
+class PipelineRegistry:
+    """ダッシュボードユーザーごとのPipelineManagerをまとめて管理する。
+
+    `manager_factory`はユーザーIDから、そのユーザー用に束縛済みのPipelineManagerを生成する
+    （app.mainで組み立てる）。
+    """
+
+    def __init__(self, *, manager_factory: Callable[[int], PipelineManager]) -> None:
+        self._manager_factory = manager_factory
+        self._managers: dict[int, PipelineManager] = {}
+
+    def is_running(self, user_id: int) -> bool:
+        manager = self._managers.get(user_id)
+        return manager is not None and manager.is_running
+
+    def start(self, user_id: int) -> None:
+        manager = self._managers.get(user_id)
+        if manager is None:
+            manager = self._manager_factory(user_id)
+            self._managers[user_id] = manager
+        manager.start()
+
+    async def restart(self, user_id: int) -> None:
+        """再ログイン時等、新しい認証情報で接続し直す。"""
+        await self.stop(user_id)
+        self.start(user_id)
+
+    async def stop(self, user_id: int) -> None:
+        manager = self._managers.pop(user_id, None)
+        if manager is not None:
+            await manager.stop()
+
+    async def stop_all(self) -> None:
+        for user_id in list(self._managers):
+            await self.stop(user_id)

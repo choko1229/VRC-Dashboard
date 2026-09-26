@@ -25,7 +25,7 @@ async def test_upsert_subscription_creates_and_updates(
             auth_key="auth-1",
             user_agent="TestAgent/1.0",
         )
-        subs = await webpush_service.list_subscriptions(db)
+        subs = await webpush_service.list_subscriptions(db, user.id)
         assert len(subs) == 1
         assert subs[0].p256dh_key == "p256dh-1"
 
@@ -38,7 +38,7 @@ async def test_upsert_subscription_creates_and_updates(
             auth_key="auth-2",
             user_agent="TestAgent/2.0",
         )
-        subs_after = await webpush_service.list_subscriptions(db)
+        subs_after = await webpush_service.list_subscriptions(db, user.id)
         assert len(subs_after) == 1
         assert subs_after[0].p256dh_key == "p256dh-2"
 
@@ -61,5 +61,30 @@ async def test_delete_subscription(
             user_agent=None,
         )
         await webpush_service.delete_subscription(db, "https://push.example.com/xyz")
-        subs = await webpush_service.list_subscriptions(db)
+        subs = await webpush_service.list_subscriptions(db, user.id)
         assert subs == []
+
+
+async def test_upsert_subscription_reassigns_owner_and_lists_per_user(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """同じendpoint（同じブラウザ）で別ユーザーがログインし直した場合は所有者を付け替える。"""
+    async with db_session_factory() as db:
+        user_a = DashboardUser(discord_user_id="10", discord_username="a")
+        user_b = DashboardUser(discord_user_id="11", discord_username="b")
+        db.add_all([user_a, user_b])
+        await db.commit()
+
+        for owner in (user_a, user_b):
+            await webpush_service.upsert_subscription(
+                db,
+                dashboard_user_id=owner.id,
+                endpoint="https://push.example.com/shared",
+                p256dh_key="p256dh",
+                auth_key="auth",
+                user_agent=None,
+            )
+
+        assert await webpush_service.list_subscriptions(db, user_a.id) == []
+        subs_b = await webpush_service.list_subscriptions(db, user_b.id)
+        assert [s.endpoint for s in subs_b] == ["https://push.example.com/shared"]

@@ -264,9 +264,12 @@ _HIDE_SYNC_EVENTS = frozenset(
 )
 
 
-async def ingest(db: AsyncSession, *, pipeline_event: str, content: dict[str, Any]) -> None:
+async def ingest(
+    db: AsyncSession, user_id: int, *, pipeline_event: str, content: dict[str, Any]
+) -> None:
+    """Pipelineイベントを、そのPipeline接続の所有者（ダッシュボードユーザー）の通知として取り込む。"""
     if pipeline_event in _HIDE_SYNC_EVENTS:
-        await _mark_hidden_from_sync_event(db, content)
+        await _mark_hidden_from_sync_event(db, user_id, content)
         return
 
     parser = _PARSERS.get(pipeline_event)
@@ -275,17 +278,20 @@ async def ingest(db: AsyncSession, *, pipeline_event: str, content: dict[str, An
     parsed = parser(content)
     if parsed is None:
         return
-    await _upsert(db, parsed)
+    await _upsert(db, user_id, parsed)
 
 
-async def _mark_hidden_from_sync_event(db: AsyncSession, content: dict[str, Any]) -> None:
+async def _mark_hidden_from_sync_event(
+    db: AsyncSession, user_id: int, content: dict[str, Any]
+) -> None:
     notification_id = content.get("notificationId") or content.get("id")
     if not isinstance(notification_id, str):
         return
     row = (
         await db.execute(
             select(VRChatNotification).where(
-                VRChatNotification.vrchat_notification_id == notification_id
+                VRChatNotification.dashboard_user_id == user_id,
+                VRChatNotification.vrchat_notification_id == notification_id,
             )
         )
     ).scalar_one_or_none()
@@ -295,11 +301,12 @@ async def _mark_hidden_from_sync_event(db: AsyncSession, content: dict[str, Any]
     await db.commit()
 
 
-async def _upsert(db: AsyncSession, parsed: _ParsedNotification) -> None:
+async def _upsert(db: AsyncSession, user_id: int, parsed: _ParsedNotification) -> None:
     existing = (
         await db.execute(
             select(VRChatNotification).where(
-                VRChatNotification.vrchat_notification_id == parsed.vrchat_notification_id
+                VRChatNotification.dashboard_user_id == user_id,
+                VRChatNotification.vrchat_notification_id == parsed.vrchat_notification_id,
             )
         )
     ).scalar_one_or_none()
@@ -308,6 +315,7 @@ async def _upsert(db: AsyncSession, parsed: _ParsedNotification) -> None:
 
     db.add(
         VRChatNotification(
+            dashboard_user_id=user_id,
             vrchat_notification_id=parsed.vrchat_notification_id,
             pipeline_event=parsed.pipeline_event,
             notification_type=parsed.notification_type,
@@ -324,8 +332,18 @@ async def _upsert(db: AsyncSession, parsed: _ParsedNotification) -> None:
     await db.commit()
 
 
+async def get_notification(
+    db: AsyncSession, user_id: int, notification_id: int
+) -> VRChatNotification | None:
+    row = await db.get(VRChatNotification, notification_id)
+    if row is None or row.dashboard_user_id != user_id:
+        return None
+    return row
+
+
 async def get_notifications(
     db: AsyncSession,
+    user_id: int,
     *,
     page: int = 0,
     notification_type: str | None = None,
@@ -333,7 +351,9 @@ async def get_notifications(
     sort_dir: str = "desc",
 ) -> tuple[list[VRChatNotification], bool]:
     """通知一覧の1ページ分を取得する。(結果, 次ページの有無) を返す。"""
-    query = select(VRChatNotification).where(VRChatNotification.is_hidden.is_(False))
+    query = select(VRChatNotification).where(
+        VRChatNotification.dashboard_user_id == user_id, VRChatNotification.is_hidden.is_(False)
+    )
 
     if notification_type:
         query = query.where(VRChatNotification.notification_type == notification_type)
@@ -354,9 +374,10 @@ async def get_notifications(
     return rows[:_PAGE_SIZE], has_more
 
 
-async def enqueue_join_command(db: AsyncSession, *, location: str) -> None:
+async def enqueue_join_command(db: AsyncSession, user_id: int, *, location: str) -> None:
     db.add(
         AgentCommand(
+            dashboard_user_id=user_id,
             command_type="join_instance",
             payload_json=json.dumps({"location": location}),
         )
@@ -383,7 +404,7 @@ async def accept(db: AsyncSession, client: VRChatClient | None, row: VRChatNotif
             logger.warning("招待リクエストへの応答に失敗しました: %s", row.vrchat_notification_id)
         row.is_hidden = True
     elif action == "join" and row.location:
-        await enqueue_join_command(db, location=row.location)
+        await enqueue_join_command(db, row.dashboard_user_id, location=row.location)
     await db.commit()
 
 

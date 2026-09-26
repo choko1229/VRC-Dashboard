@@ -29,6 +29,7 @@ async def test_instance_join_creates_instance(
     async with db_session_factory() as db:
         await game_log_service.ingest_events(
             db,
+            1,
             [
                 GameLogEventIn(
                     event_type="instance_join",
@@ -52,10 +53,9 @@ async def test_instance_leave_closes_open_instance(
     async with db_session_factory() as db:
         await game_log_service.ingest_events(
             db,
+            1,
             [
-                GameLogEventIn(
-                    event_type="instance_join", occurred_at=_dt(0), location="wrld_a:1"
-                ),
+                GameLogEventIn(event_type="instance_join", occurred_at=_dt(0), location="wrld_a:1"),
                 GameLogEventIn(event_type="instance_leave", occurred_at=_dt(15)),
             ],
         )
@@ -71,10 +71,9 @@ async def test_second_instance_join_closes_previous_without_explicit_leave(
     async with db_session_factory() as db:
         await game_log_service.ingest_events(
             db,
+            1,
             [
-                GameLogEventIn(
-                    event_type="instance_join", occurred_at=_dt(0), location="wrld_a:1"
-                ),
+                GameLogEventIn(event_type="instance_join", occurred_at=_dt(0), location="wrld_a:1"),
                 GameLogEventIn(
                     event_type="instance_join", occurred_at=_dt(20), location="wrld_b:1"
                 ),
@@ -98,21 +97,16 @@ async def test_activity_events_attach_to_open_instance(
     async with db_session_factory() as db:
         await game_log_service.ingest_events(
             db,
+            1,
             [
-                GameLogEventIn(
-                    event_type="instance_join", occurred_at=_dt(0), location="wrld_a:1"
-                ),
-                GameLogEventIn(
-                    event_type="player_join", occurred_at=_dt(1), player_name="Alice"
-                ),
+                GameLogEventIn(event_type="instance_join", occurred_at=_dt(0), location="wrld_a:1"),
+                GameLogEventIn(event_type="player_join", occurred_at=_dt(1), player_name="Alice"),
                 GameLogEventIn(
                     event_type="video_play",
                     occurred_at=_dt(2),
                     detail="https://example.com/v",
                 ),
-                GameLogEventIn(
-                    event_type="player_leave", occurred_at=_dt(3), player_name="Alice"
-                ),
+                GameLogEventIn(event_type="player_leave", occurred_at=_dt(3), player_name="Alice"),
             ],
         )
 
@@ -136,7 +130,7 @@ async def test_activity_event_without_open_instance_is_dropped(
 ) -> None:
     async with db_session_factory() as db:
         await game_log_service.ingest_events(
-            db, [GameLogEventIn(event_type="player_join", occurred_at=_dt(0), player_name="X")]
+            db, 1, [GameLogEventIn(event_type="player_join", occurred_at=_dt(0), player_name="X")]
         )
 
         events = (await db.execute(select(GameLogEvent))).scalars().all()
@@ -155,9 +149,9 @@ async def test_get_instance_summaries_counts_and_pagination(
             GameLogEventIn(event_type="video_play", occurred_at=_dt(4), detail="https://x"),
             GameLogEventIn(event_type="instance_leave", occurred_at=_dt(15)),
         ]
-        await game_log_service.ingest_events(db, events)
+        await game_log_service.ingest_events(db, 1, events)
 
-        summaries, has_more = await game_log_service.get_instance_summaries(db, page=0)
+        summaries, has_more = await game_log_service.get_instance_summaries(db, 1, page=0)
         assert has_more is False
         assert len(summaries) == 1
         summary = summaries[0]
@@ -176,16 +170,15 @@ async def test_get_instance_summaries_caps_open_duration_at_stale_heartbeat(
     async with db_session_factory() as db:
         await game_log_service.ingest_events(
             db,
+            1,
             [
-                GameLogEventIn(
-                    event_type="instance_join", occurred_at=_dt(0), location="wrld_a:1"
-                ),
+                GameLogEventIn(event_type="instance_join", occurred_at=_dt(0), location="wrld_a:1"),
             ],
         )
-        db.add(GameLogAgentToken(token_hash="dummy", last_used_at=_dt(20)))
+        db.add(GameLogAgentToken(dashboard_user_id=1, token_hash="dummy", last_used_at=_dt(20)))
         await db.commit()
 
-        summaries, _ = await game_log_service.get_instance_summaries(db, page=0)
+        summaries, _ = await game_log_service.get_instance_summaries(db, 1, page=0)
 
         assert summaries[0].instance.left_at is None
         assert summaries[0].duration_label == "20分"
@@ -197,21 +190,16 @@ async def test_get_instance_events_orders_newest_first(
     async with db_session_factory() as db:
         await game_log_service.ingest_events(
             db,
+            1,
             [
-                GameLogEventIn(
-                    event_type="instance_join", occurred_at=_dt(0), location="wrld_a:1"
-                ),
-                GameLogEventIn(
-                    event_type="player_join", occurred_at=_dt(1), player_name="First"
-                ),
-                GameLogEventIn(
-                    event_type="player_join", occurred_at=_dt(2), player_name="Second"
-                ),
+                GameLogEventIn(event_type="instance_join", occurred_at=_dt(0), location="wrld_a:1"),
+                GameLogEventIn(event_type="player_join", occurred_at=_dt(1), player_name="First"),
+                GameLogEventIn(event_type="player_join", occurred_at=_dt(2), player_name="Second"),
             ],
         )
         instance = (await db.execute(select(GameLogInstance))).scalars().one()
 
-        events = await game_log_service.get_instance_events(db, instance.id)
+        events = await game_log_service.get_instance_events(db, 1, instance.id)
         assert [e.player_name for e in events] == ["Second", "First"]
 
 
@@ -227,7 +215,7 @@ async def test_get_friend_co_presence_stats_computes_overlap(
 ) -> None:
     async with db_session_factory() as db:
         instance = GameLogInstance(
-            location="wrld_a:1", joined_at=_dt(0), left_at=_dt(59)
+            dashboard_user_id=1, location="wrld_a:1", joined_at=_dt(0), left_at=_dt(59)
         )
         db.add(instance)
         await db.flush()
@@ -249,7 +237,7 @@ async def test_get_friend_co_presence_stats_computes_overlap(
         )
         await db.commit()
 
-        stats = await game_log_service.get_friend_co_presence_stats(db, ["usr_friend"])
+        stats = await game_log_service.get_friend_co_presence_stats(db, 1, ["usr_friend"])
 
         assert stats["usr_friend"].join_count == 1
         assert stats["usr_friend"].together_seconds == 30 * 60
@@ -260,7 +248,7 @@ async def test_get_friend_co_presence_stats_no_leave_uses_my_left_at(
 ) -> None:
     async with db_session_factory() as db:
         instance = GameLogInstance(
-            location="wrld_b:1", joined_at=_dt(0), left_at=_dt(20)
+            dashboard_user_id=1, location="wrld_b:1", joined_at=_dt(0), left_at=_dt(20)
         )
         db.add(instance)
         await db.flush()
@@ -274,7 +262,7 @@ async def test_get_friend_co_presence_stats_no_leave_uses_my_left_at(
         )
         await db.commit()
 
-        stats = await game_log_service.get_friend_co_presence_stats(db, ["usr_friend2"])
+        stats = await game_log_service.get_friend_co_presence_stats(db, 1, ["usr_friend2"])
 
         assert stats["usr_friend2"].join_count == 1
         assert stats["usr_friend2"].together_seconds == 15 * 60
@@ -284,4 +272,46 @@ async def test_get_friend_co_presence_stats_empty_ids_returns_empty(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        assert await game_log_service.get_friend_co_presence_stats(db, []) == {}
+        assert await game_log_service.get_friend_co_presence_stats(db, 1, []) == {}
+
+
+async def test_game_log_is_isolated_per_dashboard_user(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """ユーザーごとに開いているインスタンスが独立し、他ユーザーの履歴は取得できないこと。"""
+    async with db_session_factory() as db:
+        await game_log_service.ingest_events(
+            db,
+            1,
+            [GameLogEventIn(event_type="instance_join", occurred_at=_dt(0), location="wrld_a:1")],
+        )
+        # ユーザー2のjoinがユーザー1の開いたインスタンスを閉じてはいけない。
+        await game_log_service.ingest_events(
+            db,
+            2,
+            [GameLogEventIn(event_type="instance_join", occurred_at=_dt(5), location="wrld_b:1")],
+        )
+        # ユーザー2のアクティビティはユーザー2のインスタンスにだけ紐づく。
+        await game_log_service.ingest_events(
+            db,
+            2,
+            [GameLogEventIn(event_type="player_join", occurred_at=_dt(6), player_name="Bob")],
+        )
+
+        instances = (
+            (await db.execute(select(GameLogInstance).order_by(GameLogInstance.joined_at)))
+            .scalars()
+            .all()
+        )
+        assert [(i.dashboard_user_id, i.left_at) for i in instances] == [(1, None), (2, None)]
+        user1_instance, user2_instance = instances
+
+        summaries_u2, _ = await game_log_service.get_instance_summaries(db, 2, page=0)
+        assert [s.instance.id for s in summaries_u2] == [user2_instance.id]
+        summaries_u1, _ = await game_log_service.get_instance_summaries(db, 1, page=0)
+        assert [s.instance.id for s in summaries_u1] == [user1_instance.id]
+
+        assert await game_log_service.get_instance_events(db, 2, user1_instance.id) == []
+        assert await game_log_service.get_instance_events(db, 1, user1_instance.id) == []
+        events_u2 = await game_log_service.get_instance_events(db, 2, user2_instance.id)
+        assert [e.player_name for e in events_u2] == ["Bob"]

@@ -9,23 +9,23 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_cipher, get_current_user
+from app.core.deps import get_cipher, get_current_vrchat_user
 from app.core.security import SecretCipher
 from app.core.templating import templates
 from app.db.session import get_db
+from app.models.dashboard_user import DashboardUser
 from app.models.schedule_event import ScheduleEvent
 from app.services import (
-    app_config_service,
     calendar_view,
     schedule_service,
     vrchat_session_service,
     vrchat_sync_service,
 )
-from app.services.vrchat.client import VRChatAPIError, VRChatClient
+from app.services.vrchat.client import VRChatAPIError
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/schedule", dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/schedule", dependencies=[Depends(get_current_vrchat_user)])
 
 
 @router.get("", response_class=HTMLResponse)
@@ -44,12 +44,16 @@ async def schedule_page(
 
 @router.get("/partials/month", response_class=HTMLResponse)
 async def month_partial(
-    request: Request, year: int, month: int, db: AsyncSession = Depends(get_db)
+    request: Request,
+    year: int,
+    month: int,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
     weeks = calendar_view.month_grid(year, month)
     start_date = weeks[0][0]
     end_date = weeks[-1][-1]
-    events = await schedule_service.list_events_for_range(db, start_date, end_date)
+    events = await schedule_service.list_events_for_range(db, user.id, start_date, end_date)
 
     events_by_day: dict[date, list[ScheduleEvent]] = {}
     for event in events:
@@ -77,10 +81,13 @@ async def month_partial(
 
 @router.get("/partials/week", response_class=HTMLResponse)
 async def week_partial(
-    request: Request, start_date: date, db: AsyncSession = Depends(get_db)
+    request: Request,
+    start_date: date,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
     days = calendar_view.week_days(start_date)
-    events = await schedule_service.list_events_for_range(db, days[0], days[-1])
+    events = await schedule_service.list_events_for_range(db, user.id, days[0], days[-1])
 
     events_by_day: dict[date, list[ScheduleEvent]] = {}
     for event in events:
@@ -95,9 +102,12 @@ async def week_partial(
 
 @router.get("/partials/day/{event_date}", response_class=HTMLResponse)
 async def day_partial(
-    request: Request, event_date: date, db: AsyncSession = Depends(get_db)
+    request: Request,
+    event_date: date,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    events = await schedule_service.list_events_for_day(db, event_date)
+    events = await schedule_service.list_events_for_day(db, user.id, event_date)
     return templates.TemplateResponse(
         request, "schedule/_day_panel.html", {"event_date": event_date, "events": events}
     )
@@ -122,9 +132,11 @@ async def create_event(
     world_name: str = Form(""),
     memo: str = Form(""),
     db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
     await schedule_service.create_event(
         db,
+        user.id,
         title=title,
         event_date=event_date,
         start_time=start_time,
@@ -133,7 +145,7 @@ async def create_event(
         avatar_id=None,
         memo=memo,
     )
-    events = await schedule_service.list_events_for_day(db, event_date)
+    events = await schedule_service.list_events_for_day(db, user.id, event_date)
     return templates.TemplateResponse(
         request, "schedule/_day_panel.html", {"event_date": event_date, "events": events}
     )
@@ -141,9 +153,12 @@ async def create_event(
 
 @router.get("/events/{event_id}/edit", response_class=HTMLResponse)
 async def edit_event_form(
-    request: Request, event_id: int, db: AsyncSession = Depends(get_db)
+    request: Request,
+    event_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    event = await db.get(ScheduleEvent, event_id)
+    event = await schedule_service.get_event(db, user.id, event_id)
     if event is None:
         return templates.TemplateResponse(request, "schedule/_not_found.html", status_code=404)
     return templates.TemplateResponse(
@@ -162,9 +177,11 @@ async def update_event(
     world_name: str = Form(""),
     memo: str = Form(""),
     db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
     await schedule_service.update_event(
         db,
+        user.id,
         event_id,
         title=title,
         event_date=event_date,
@@ -174,7 +191,7 @@ async def update_event(
         avatar_id=None,
         memo=memo,
     )
-    events = await schedule_service.list_events_for_day(db, event_date)
+    events = await schedule_service.list_events_for_day(db, user.id, event_date)
     return templates.TemplateResponse(
         request, "schedule/_day_panel.html", {"event_date": event_date, "events": events}
     )
@@ -182,10 +199,14 @@ async def update_event(
 
 @router.delete("/events/{event_id}", response_class=HTMLResponse)
 async def delete_event(
-    request: Request, event_id: int, event_date: date, db: AsyncSession = Depends(get_db)
+    request: Request,
+    event_id: int,
+    event_date: date,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    await schedule_service.delete_event(db, event_id)
-    events = await schedule_service.list_events_for_day(db, event_date)
+    await schedule_service.delete_event(db, user.id, event_id)
+    events = await schedule_service.list_events_for_day(db, user.id, event_date)
     return templates.TemplateResponse(
         request, "schedule/_day_panel.html", {"event_date": event_date, "events": events}
     )
@@ -197,24 +218,20 @@ async def import_vrchat_calendar(
     vrchat_group_id: str = Form(...),
     db: AsyncSession = Depends(get_db),
     cipher: SecretCipher = Depends(get_cipher),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    cookies = await vrchat_session_service.get_decrypted_cookies(db, cipher)
-    if cookies is None:
+    client = await vrchat_session_service.build_client(db, cipher, user.id)
+    if client is None:
         return templates.TemplateResponse(
             request,
             "schedule/_import_result.html",
             {"success": False, "message": "VRChatと連携していません。"},
         )
 
-    auth_cookie, two_factor_cookie = cookies
-    user_agent = await app_config_service.get_vrchat_user_agent(db)
-    client = VRChatClient(
-        user_agent=user_agent,
-        auth_cookie=auth_cookie,
-        two_factor_cookie=two_factor_cookie,
-    )
     try:
-        imported = await vrchat_sync_service.import_group_calendar(db, client, vrchat_group_id)
+        imported = await vrchat_sync_service.import_group_calendar(
+            db, user.id, client, vrchat_group_id
+        )
     except VRChatAPIError as exc:
         return templates.TemplateResponse(
             request,

@@ -33,7 +33,7 @@ from app.schemas.vrchat import (
     parse_trust_rank,
     parse_world_id_from_location,
 )
-from app.services import app_config_service, game_log_service, vrchat_session_service
+from app.services import game_log_service, vrchat_session_service
 from app.services.vrchat.client import VRChatAPIError, VRChatClient
 
 logger = logging.getLogger(__name__)
@@ -188,13 +188,28 @@ _TABLE_SORT_KEYS: dict[str, object] = {
 }
 
 
+async def get_friend(db: AsyncSession, user_id: int, friend_id: int) -> Friend | None:
+    """指定ユーザーが所有するフレンドを取得する（他ユーザーのフレンドIDを指定された場合はNone）。"""
+    friend = await db.get(Friend, friend_id)
+    if friend is None or friend.dashboard_user_id != user_id:
+        return None
+    return friend
+
+
+async def list_friends(db: AsyncSession, user_id: int) -> list[Friend]:
+    result = await db.execute(
+        select(Friend).where(Friend.dashboard_user_id == user_id).order_by(Friend.display_name)
+    )
+    return list(result.scalars().all())
+
+
 async def get_friend_table_rows(
-    db: AsyncSession, *, sort_by: str = "display_name", sort_dir: str = "asc"
+    db: AsyncSession, user_id: int, *, sort_by: str = "display_name", sort_dir: str = "asc"
 ) -> list[FriendTableRow]:
     """フレンド一覧のテーブル表示（VRCX風）用に、全フレンドと集計値をまとめて返す。"""
-    friends = list((await db.execute(select(Friend).order_by(Friend.display_name))).scalars().all())
+    friends = await list_friends(db, user_id)
     co_presence = await game_log_service.get_friend_co_presence_stats(
-        db, [f.vrchat_user_id for f in friends]
+        db, user_id, [f.vrchat_user_id for f in friends]
     )
 
     _empty_stats = game_log_service.CoPresenceStats(0, 0.0)
@@ -215,17 +230,25 @@ async def get_friend_table_rows(
 
 
 async def _get_or_create_friend(
-    db: AsyncSession, vrchat_user_id: str, display_name: str | None
+    db: AsyncSession, user_id: int, vrchat_user_id: str, display_name: str | None
 ) -> Friend:
     """既存フレンドをdisplay_name無しで呼んでも（Pipelineイベントにたまたま
     displayNameが含まれていなかった場合等）、既存の表示名を上書きしない。
     新規作成時にdisplay_nameが無い場合のみ、暫定的にuser_idをそのまま使う
     （次にdisplayName付きのイベントが来れば置き換わる）。
     """
-    result = await db.execute(select(Friend).where(Friend.vrchat_user_id == vrchat_user_id))
+    result = await db.execute(
+        select(Friend).where(
+            Friend.dashboard_user_id == user_id, Friend.vrchat_user_id == vrchat_user_id
+        )
+    )
     friend = result.scalar_one_or_none()
     if friend is None:
-        friend = Friend(vrchat_user_id=vrchat_user_id, display_name=display_name or vrchat_user_id)
+        friend = Friend(
+            dashboard_user_id=user_id,
+            vrchat_user_id=vrchat_user_id,
+            display_name=display_name or vrchat_user_id,
+        )
         db.add(friend)
         await db.flush()
     return friend
@@ -249,6 +272,7 @@ async def _maybe_notify(
 
 async def bootstrap_friends_from_vrchat(
     db: AsyncSession,
+    user_id: int,
     client: VRChatClient,
     *,
     online_friends: list[VRChatUser],
@@ -267,7 +291,9 @@ async def bootstrap_friends_from_vrchat(
         *((u, True) for u in online_friends),
         *((u, False) for u in offline_friends),
     ):
-        friend = await _get_or_create_friend(db, vrchat_user.id, vrchat_user.display_name)
+        friend = await _get_or_create_friend(
+            db, user_id, vrchat_user.id, vrchat_user.display_name
+        )
         friend.display_name = vrchat_user.display_name
         friend.is_online = is_online
         friend.activity_status = vrchat_user.status
@@ -308,7 +334,9 @@ async def bootstrap_friends_from_vrchat(
     )
 
 
-async def sync_friend_profile_details(db: AsyncSession, client: VRChatClient) -> None:
+async def sync_friend_profile_details(
+    db: AsyncSession, user_id: int, client: VRChatClient
+) -> None:
     """フレンド一覧のテーブル表示用に、ランク/言語/自己紹介リンク/参加日時をまとめて取得する。
 
     これらはVRChatのフルプロフィール（GET /users/{id}）でしか取得できない
@@ -317,7 +345,7 @@ async def sync_friend_profile_details(db: AsyncSession, client: VRChatClient) ->
     手動再同期時にのみ実行する。取得に失敗したフレンドはスキップし、既存の値を保持したまま
     処理を続ける。
     """
-    friends = list((await db.execute(select(Friend))).scalars().all())
+    friends = await list_friends(db, user_id)
     for friend in friends:
         try:
             profile = await client.get_user(friend.vrchat_user_id)
@@ -334,20 +362,29 @@ async def sync_friend_profile_details(db: AsyncSession, client: VRChatClient) ->
 
 
 async def sync_favorite_groups(
-    db: AsyncSession, *, groups: list[VRChatFavoriteGroup], favorites: list[VRChatFavorite]
+    db: AsyncSession,
+    user_id: int,
+    *,
+    groups: list[VRChatFavoriteGroup],
+    favorites: list[VRChatFavorite],
 ) -> None:
     """VRChatのお気に入りグループ・所属関係をDBへ反映する（syncedグループのみ全置換）。"""
     group_name_to_id: dict[str, int] = {}
 
     for group in groups:
         result = await db.execute(
-            select(FriendGroup).where(FriendGroup.vrchat_group_id == group.id)
+            select(FriendGroup).where(
+                FriendGroup.dashboard_user_id == user_id, FriendGroup.vrchat_group_id == group.id
+            )
         )
         row = result.scalar_one_or_none()
         display_name = group.display_name or group.name
         if row is None:
             row = FriendGroup(
-                vrchat_group_id=group.id, name=display_name, source="synced"
+                dashboard_user_id=user_id,
+                vrchat_group_id=group.id,
+                name=display_name,
+                source="synced",
             )
             db.add(row)
             await db.flush()
@@ -366,7 +403,10 @@ async def sync_favorite_groups(
 
     for favorite in favorites:
         result = await db.execute(
-            select(Friend).where(Friend.vrchat_user_id == favorite.favorite_id)
+            select(Friend).where(
+                Friend.dashboard_user_id == user_id,
+                Friend.vrchat_user_id == favorite.favorite_id,
+            )
         )
         friend = result.scalar_one_or_none()
         if friend is None:
@@ -383,6 +423,7 @@ async def sync_favorite_groups(
 async def handle_friend_online(
     db: AsyncSession,
     sender: NotificationSender,
+    user_id: int,
     *,
     vrchat_user_id: str,
     display_name: str | None,
@@ -390,7 +431,7 @@ async def handle_friend_online(
     world_name: str | None,
     world_thumbnail_url: str | None = None,
 ) -> None:
-    friend = await _get_or_create_friend(db, vrchat_user_id, display_name)
+    friend = await _get_or_create_friend(db, user_id, vrchat_user_id, display_name)
     # display_nameが無いイベント（VRChat側の省略等）で既存の表示名をuser_idに
     # 上書きしてしまわないよう、取得できた時だけ更新する。
     if display_name:
@@ -435,10 +476,15 @@ async def handle_friend_online(
 
 
 async def handle_friend_active(
-    db: AsyncSession, sender: NotificationSender, *, vrchat_user_id: str, display_name: str | None
+    db: AsyncSession,
+    sender: NotificationSender,
+    user_id: int,
+    *,
+    vrchat_user_id: str,
+    display_name: str | None,
 ) -> None:
     """friend-activeイベント: 接続中だがワールドに滞在していない（Web/メニュー等）状態。"""
-    friend = await _get_or_create_friend(db, vrchat_user_id, display_name)
+    friend = await _get_or_create_friend(db, user_id, vrchat_user_id, display_name)
     if display_name:
         friend.display_name = display_name
     was_online = friend.is_online
@@ -474,9 +520,14 @@ async def handle_friend_active(
 
 
 async def handle_friend_offline(
-    db: AsyncSession, sender: NotificationSender, *, vrchat_user_id: str, display_name: str | None
+    db: AsyncSession,
+    sender: NotificationSender,
+    user_id: int,
+    *,
+    vrchat_user_id: str,
+    display_name: str | None,
 ) -> None:
-    friend = await _get_or_create_friend(db, vrchat_user_id, display_name)
+    friend = await _get_or_create_friend(db, user_id, vrchat_user_id, display_name)
     friend.is_online = False
     friend.online_state = "offline"
     friend.current_world_id = None
@@ -510,6 +561,7 @@ async def handle_friend_offline(
 async def handle_friend_location_change(
     db: AsyncSession,
     sender: NotificationSender,
+    user_id: int,
     *,
     vrchat_user_id: str,
     display_name: str | None,
@@ -517,7 +569,7 @@ async def handle_friend_location_change(
     world_name: str | None,
     world_thumbnail_url: str | None = None,
 ) -> None:
-    friend = await _get_or_create_friend(db, vrchat_user_id, display_name)
+    friend = await _get_or_create_friend(db, user_id, vrchat_user_id, display_name)
     world_id = parse_world_id_from_location(location)
     friend.is_online = True
     friend.online_state = "online"
@@ -556,9 +608,13 @@ async def handle_friend_location_change(
     )
 
 
-async def handle_friend_status_update(db: AsyncSession, *, vrchat_user: VRChatUser) -> None:
+async def handle_friend_status_update(
+    db: AsyncSession, user_id: int, *, vrchat_user: VRChatUser
+) -> None:
     """statusDescription/表示名/サムネイル等の属性更新。ステータス・アバターの変化はフィード用に記録する。"""
-    friend = await _get_or_create_friend(db, vrchat_user.id, vrchat_user.display_name)
+    friend = await _get_or_create_friend(
+        db, user_id, vrchat_user.id, vrchat_user.display_name
+    )
     previous_status = friend.activity_status
     previous_avatar_url = friend.current_avatar_thumbnail_url
     now = datetime.now(UTC)
@@ -591,31 +647,14 @@ async def handle_friend_status_update(db: AsyncSession, *, vrchat_user: VRChatUs
     await db.commit()
 
 
-async def _build_client_from_session(
-    db: AsyncSession, cipher: SecretCipher
-) -> VRChatClient | None:
-    """保存済みのVRChatセッションからAPIクライアントを組み立てる。未連携ならNone。
-
-    呼び出し側は必ずtry/finallyで`close()`すること。
-    """
-    cookies = await vrchat_session_service.get_decrypted_cookies(db, cipher)
-    if cookies is None:
-        return None
-    auth_cookie, two_factor_cookie = cookies
-    user_agent = await app_config_service.get_vrchat_user_agent(db)
-    return VRChatClient(
-        user_agent=user_agent, auth_cookie=auth_cookie, two_factor_cookie=two_factor_cookie
-    )
-
-
 async def fetch_live_profile(
-    db: AsyncSession, cipher: SecretCipher, *, vrchat_user_id: str
+    db: AsyncSession, cipher: SecretCipher, user_id: int, *, vrchat_user_id: str
 ) -> VRChatUser | None:
     """フレンド詳細モーダル用に、bio/アカウント作成日/会員ランク等のフルプロフィールを
     VRChatから都度取得する。VRChat未連携時や通信失敗時はNoneを返し、呼び出し側は
     ローカルに保存済みの情報のみで表示を続行する。
     """
-    client = await _build_client_from_session(db, cipher)
+    client = await vrchat_session_service.build_client(db, cipher, user_id)
     if client is None:
         return None
     try:
@@ -638,16 +677,16 @@ class GroupsOverview:
 
 
 async def fetch_groups_overview(
-    db: AsyncSession, cipher: SecretCipher, *, vrchat_user_id: str
+    db: AsyncSession, cipher: SecretCipher, user_id: int, *, vrchat_user_id: str
 ) -> GroupsOverview | None:
-    client = await _build_client_from_session(db, cipher)
+    client = await vrchat_session_service.build_client(db, cipher, user_id)
     if client is None:
         return None
     try:
         friend_groups = await client.get_user_groups(vrchat_user_id)
 
         common_group_ids: set[str] = set()
-        session = await vrchat_session_service.get_active_session(db)
+        session = await vrchat_session_service.get_active_session(db, user_id)
         if session is not None:
             try:
                 self_groups = await client.get_user_groups(session.vrchat_user_id)
@@ -665,10 +704,10 @@ async def fetch_groups_overview(
 
 
 async def fetch_user_worlds(
-    db: AsyncSession, cipher: SecretCipher, *, vrchat_user_id: str
+    db: AsyncSession, cipher: SecretCipher, user_id: int, *, vrchat_user_id: str
 ) -> list[VRChatWorld] | None:
     """フレンドが公開しているワールド一覧を取得する。取得不可の場合はNone。"""
-    client = await _build_client_from_session(db, cipher)
+    client = await vrchat_session_service.build_client(db, cipher, user_id)
     if client is None:
         return None
     try:

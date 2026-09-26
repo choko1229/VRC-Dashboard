@@ -35,6 +35,7 @@ class FeedEntry:
 
 async def get_feed_entries(
     db: AsyncSession,
+    user_id: int,
     *,
     page: int = 0,
     event_type: str | None = None,
@@ -42,8 +43,10 @@ async def get_feed_entries(
     search: str = "",
 ) -> tuple[list[FeedEntry], bool]:
     """フィードの1ページ分を新しい順に取得する。(結果, 次ページの有無) を返す。"""
-    query = select(FriendPresenceEvent, Friend).join(
-        Friend, FriendPresenceEvent.friend_id == Friend.id
+    query = (
+        select(FriendPresenceEvent, Friend)
+        .join(Friend, FriendPresenceEvent.friend_id == Friend.id)
+        .where(Friend.dashboard_user_id == user_id)
     )
 
     if event_type and event_type in _VALID_EVENT_TYPES:

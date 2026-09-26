@@ -1,7 +1,8 @@
 # VRC事前確認ダッシュボード
 
 VRChatにログインする前に、フレンドのオンライン状況・自分のアバターの準備状況・今日の予定を
-一括で確認できる、Discordログイン制のWebダッシュボードです。
+一括で確認できる、Discordログイン制のWebダッシュボードです。複数人で利用でき、Discordアカウント
+ごとに各自のVRChatアカウントでログインして使います。
 
 FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築されています。
 
@@ -9,8 +10,39 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
 
 - **Discordログイン**: 許可リスト方式のDiscord OAuth2ログイン。最初にログインしたユーザーは
   自動的に管理者となり、許可リストへ自己登録される（`/setup` 初回セットアップ画面）。
-- **フレンド状況**: VRChatの認証情報を保存し、Pipeline（WebSocket）でフレンドのオンライン/
-  オフライン・ワールド移動をリアルタイムに反映。
+- **複数人利用（Discordアカウントごとの VRChat ログイン）**: 許可リストに登録された各Discord
+  アカウント（`dashboard_user`）は、それぞれ自分のVRChatアカウントでログインしてから使う。
+  VRChat未ログイン（またはセッション失効）の状態で機能ページを開くと、VRChatログイン画面
+  （`/settings/vrchat`）へリダイレクトされる（依存関係`app.core.deps.get_current_vrchat_user`、
+  HTMXの部分更新リクエストには`HX-Redirect`で応答）。ログインが完了するとフレンド・アバターを
+  初回同期してホームへ遷移する。
+  - フレンド・フレンドグループ・アバター・タグ・予定・VRChat通知・ゲームログ・エージェント
+    トークン/コマンド・同期状況は全て`dashboard_user_id`列で所有者ごとに分離し、他ユーザーの
+    データのIDを直接指定しても参照・変更できない（404/無視）。VRChat由来の一意キー
+    （`friend.vrchat_user_id`等）は「所有者単位で一意」に変更しているため、同じVRChat
+    ユーザーが複数の利用者のフレンドであっても問題ない。
+  - VRChat Pipeline（WebSocket）はVRChatにログイン中のユーザーごとに1本ずつ接続する
+    （`app.services.vrchat.pipeline.PipelineRegistry`。起動時にログイン済みユーザー全員分を
+    起動）。VRChat側でセッションが失効している（401）場合は再接続を諦めてセッションを無効化し、
+    次にページを開いた時に再ログインを求める。
+  - 許可リストからユーザーを削除すると、そのユーザーのダッシュボードのログインセッションを
+    全て失効させ、VRChatセッションを無効化してPipeline接続を止め、デスクトップエージェントの
+    トークンも削除する（`auth_service.revoke_access`）。フレンド等のデータは残すため、
+    再登録すればDiscord/VRChatへの再ログインとエージェントの再ペアリングで元どおり使える。
+    削除画面以外の経路（DB直接操作等）で外された場合も、ログイン確認（`get_current_user`）・
+    エージェント認証（`require_game_log_api_key`）・起動時のPipeline一斉起動の各所で許可リストを
+    照合するため締め出される。管理者は自分自身の許可は取り消せない（締め出し防止）。
+  - 1つのVRChatアカウントを複数のDiscordアカウントで共有することはできない（同じフレンド・
+    通知が重複して取り込まれ、Pipelineも二重接続になるため、ログイン時に拒否する）。
+  - Discord OAuthアプリ・VRChat API連絡先（User-Agent）・Discord BOTの接続先はダッシュボード
+    全体で共通の設定のため、管理者のみ変更できる（`/settings/general`、
+    `/settings/notifications`のDiscord欄）。
+  - 単一ユーザー時代の既存データは、マイグレーション（`a7c3e91d5b20`）で管理者（管理者が
+    いなければ最初のユーザー）の所有として引き継ぐ。管理者が1人もいない環境（`is_admin`列の
+    追加前から使っていた環境）では、ユーザー招待（許可リスト管理）ができるよう、このユーザーを
+    管理者に昇格させる。
+- **フレンド状況**: 各ユーザーのVRChatの認証情報を保存し、Pipeline（WebSocket）でフレンドの
+  オンライン/オフライン・ワールド移動をリアルタイムに反映。
   - 右サイドバーは全フレンド（上限100人、オンライン優先で切り詰め）を常時表示し、
     「オンライン／アクティブ／オフライン」に区分（オフラインのみデフォルト折りたたみ）。
     オンライン区分はフレンド一覧ページと同じロジック
@@ -83,10 +115,12 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
   - **認証**: APIキーの手動コピー&ペーストではなく、OAuth 2.0 Device Authorization Grant
     （RFC 8628）に似た「ブラウザでログイン→承認」方式でペアリングする。エージェント起動時に
     `POST /api/game-log/agent/pair`でコードを取得してブラウザで`/game-log/device`を開き、
-    管理者としてログイン中のユーザーが表示されたコードを承認すると、エージェントが
+    ログイン中のユーザーが表示されたコードを承認すると、エージェントが
     `POST /api/game-log/agent/pair/poll`のポーリングでトークンを自動的に受け取る
     （`game_log_agent_token`テーブルで複数デバイス分のトークンを個別に管理するため、
-    後から別のPCをペアリングしても既存デバイスのトークンは無効化されない）。
+    後から別のPCをペアリングしても既存デバイスのトークンは無効化されない）。トークンは
+    承認したユーザーの所有になり、そのPCから送られたゲームログ・そのPCが受け取る
+    「参加」コマンドもそのユーザーのものとして扱う（トークンの無効化も本人のみ）。
   - **自動更新**: 起動時と6時間ごとにGitHub Releasesの最新版を確認し、自身より新しければ
     ダウンロードして自己置換・再起動する（サーバーには自動更新用のエンドポイントを持たない）。
   - **退出漏れ対策**: VRChatを強制終了/クラッシュで落とすとログに`OnLeftRoom`が出力されず、
@@ -149,7 +183,8 @@ FastAPI + Jinja2 + HTMX + SQLite（SQLAlchemy async / Alembic）で構築され�
   （月間/週間カレンダー表示）。
 - **通知**: ブラウザ通知（Web Push、VAPID鍵は自動生成）、および既存Discord BOTへのHTTP通知
   （BOT側の受け口実装は本リポジトリのスコープ外）。ブラウザ通知は`/settings/notifications`で
-  ON/OFFを切り替える。通知クリック時は関連するフレンドの詳細ページ（`/friends/{id}`）へ、
+  ON/OFFを切り替える。通知は発生元のユーザー本人にだけ届く（Web Pushはそのユーザーの購読
+  のみに送信し、Discord BOTへのペイロードには宛先の`recipient_discord_user_id`を付ける）。通知クリック時は関連するフレンドの詳細ページ（`/friends/{id}`）へ、
   フレンド以外の通知（Pipeline再接続失敗等）はトップページへ遷移する
   （`NotificationPayload.link_path`）。
 - **PWA（プログレッシブWebアプリ）**: `manifest.json`によりホーム画面への追加・スタンドアロン
@@ -201,6 +236,7 @@ uvicorn app.main:app --reload
 OAuth2アプリのClient ID/Secretを入力する（画面に表示されるリダイレクトURLをDiscord側の
 Redirectsにも登録する）。保存後、最初にログインしたDiscordアカウントが自動的に管理者となる。
 他のユーザーを招待する場合は、ログイン後の「管理」画面（`/settings/allowlist`）から追加する。
+各ユーザーはDiscordでログインした後、自分のVRChatアカウントでのログインを求められる。
 
 ## テスト・静的解析
 
@@ -284,7 +320,7 @@ tests/                  # unit / integration
   （次にdisplayName付きのイベントが来るまで残る）ため、「VRChatと同期」を1回実行して
   REST APIから正しい表示名を取得し直すこと（`bootstrap_friends_from_vrchat`が全フレンド分の
   `display_name`をREST側の値で無条件に上書きする）。
-- VRChatの認証情報・Discord OAuthシークレット・VAPID秘密鍵はFernetで暗号化してDBに保存する
+- VRChatの認証情報（ユーザーごと）・Discord OAuthシークレット・VAPID秘密鍵はFernetで暗号化してDBに保存する
   （暗号鍵は `FERNET_MASTER_KEY` 未設定時 `data/fernet.key` に自動生成・永続化される）。
 - フレンド一覧／サイドバーの「オンライン」区分は、各フレンドの`current_location`を突き合わせて
   インスタンスごとにグループ化する（`friends_service.group_online_friends_by_instance`。人数の

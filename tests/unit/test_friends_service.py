@@ -27,6 +27,7 @@ async def test_handle_friend_online_creates_friend_and_event(
         await friends_service.handle_friend_online(
             db,
             sender,
+            1,
             vrchat_user_id="usr_1",
             display_name="Alice",
             location="wrld_abc:12345",
@@ -51,7 +52,7 @@ async def test_handle_friend_online_notifies_when_pref_enabled(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        friend = Friend(vrchat_user_id="usr_2", display_name="Bob")
+        friend = Friend(dashboard_user_id=1, vrchat_user_id="usr_2", display_name="Bob")
         db.add(friend)
         await db.commit()
         await db.refresh(friend)
@@ -62,6 +63,7 @@ async def test_handle_friend_online_notifies_when_pref_enabled(
         await friends_service.handle_friend_online(
             db,
             sender,
+            1,
             vrchat_user_id="usr_2",
             display_name="Bob",
             location=None,
@@ -80,13 +82,14 @@ async def test_handle_friend_offline_clears_world_info(
         await friends_service.handle_friend_online(
             db,
             sender,
+            1,
             vrchat_user_id="usr_3",
             display_name="Carol",
             location="wrld_xyz:1",
             world_name="World",
         )
         await friends_service.handle_friend_offline(
-            db, sender, vrchat_user_id="usr_3", display_name="Carol"
+            db, sender, 1, vrchat_user_id="usr_3", display_name="Carol"
         )
 
         result = await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_3"))
@@ -105,7 +108,7 @@ async def test_handle_friend_active_sets_online_state_without_location(
     async with db_session_factory() as db:
         sender = FakeNotificationSender()
         await friends_service.handle_friend_active(
-            db, sender, vrchat_user_id="usr_active", display_name="Dave"
+            db, sender, 1, vrchat_user_id="usr_active", display_name="Dave"
         )
 
         result = await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_active"))
@@ -124,6 +127,7 @@ async def test_handle_friend_online_then_offline_updates_online_state(
         await friends_service.handle_friend_online(
             db,
             sender,
+            1,
             vrchat_user_id="usr_state",
             display_name="Erin",
             location="wrld_a:1",
@@ -133,7 +137,7 @@ async def test_handle_friend_online_then_offline_updates_online_state(
         assert result.scalar_one().online_state == "online"
 
         await friends_service.handle_friend_offline(
-            db, sender, vrchat_user_id="usr_state", display_name="Erin"
+            db, sender, 1, vrchat_user_id="usr_state", display_name="Erin"
         )
         result = await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_state"))
         assert result.scalar_one().online_state == "offline"
@@ -179,7 +183,11 @@ async def test_bootstrap_friends_from_vrchat(
             world_name="テストワールド", thumbnail_url="https://example.com/thumb.png"
         )
         await friends_service.bootstrap_friends_from_vrchat(
-            db, client, online_friends=online, offline_friends=offline  # type: ignore[arg-type]
+            db,
+            1,
+            client,
+            online_friends=online,
+            offline_friends=offline,  # type: ignore[arg-type]
         )
 
         friends = (await db.execute(select(Friend))).scalars().all()
@@ -198,7 +206,7 @@ async def test_sync_favorite_groups_links_memberships(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        friend = Friend(vrchat_user_id="usr_c", display_name="Carl")
+        friend = Friend(dashboard_user_id=1, vrchat_user_id="usr_c", display_name="Carl")
         db.add(friend)
         await db.commit()
         await db.refresh(friend)
@@ -208,7 +216,7 @@ async def test_sync_favorite_groups_links_memberships(
         ]
         favorites = [VRChatFavorite(id="fav_1", favorite_id="usr_c", tags=["group_0"])]
 
-        await friends_service.sync_favorite_groups(db, groups=groups, favorites=favorites)
+        await friends_service.sync_favorite_groups(db, 1, groups=groups, favorites=favorites)
 
         result = await db.execute(select(FriendGroup).where(FriendGroup.vrchat_group_id == "grp_1"))
         group = result.scalar_one()
@@ -224,7 +232,7 @@ async def test_fetch_live_profile_returns_none_without_vrchat_session(
     cipher = SecretCipher(_TEST_FERNET_KEY)
     async with db_session_factory() as db:
         profile = await friends_service.fetch_live_profile(
-            db, cipher, vrchat_user_id="usr_no_session"
+            db, cipher, 1, vrchat_user_id="usr_no_session"
         )
         assert profile is None
 
@@ -235,7 +243,7 @@ async def test_fetch_groups_overview_returns_none_without_vrchat_session(
     cipher = SecretCipher(_TEST_FERNET_KEY)
     async with db_session_factory() as db:
         overview = await friends_service.fetch_groups_overview(
-            db, cipher, vrchat_user_id="usr_no_session"
+            db, cipher, 1, vrchat_user_id="usr_no_session"
         )
         assert overview is None
 
@@ -246,7 +254,7 @@ async def test_fetch_user_worlds_returns_none_without_vrchat_session(
     cipher = SecretCipher(_TEST_FERNET_KEY)
     async with db_session_factory() as db:
         worlds = await friends_service.fetch_user_worlds(
-            db, cipher, vrchat_user_id="usr_no_session"
+            db, cipher, 1, vrchat_user_id="usr_no_session"
         )
         assert worlds is None
 
@@ -255,7 +263,7 @@ async def test_compute_activity_stats_empty_when_no_events(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        friend = Friend(vrchat_user_id="usr_activity", display_name="Activity")
+        friend = Friend(dashboard_user_id=1, vrchat_user_id="usr_activity", display_name="Activity")
         db.add(friend)
         await db.commit()
         await db.refresh(friend)
@@ -273,7 +281,9 @@ async def test_compute_activity_stats_aggregates_online_events(
     from datetime import UTC, datetime
 
     async with db_session_factory() as db:
-        friend = Friend(vrchat_user_id="usr_activity2", display_name="Activity2")
+        friend = Friend(
+            dashboard_user_id=1, vrchat_user_id="usr_activity2", display_name="Activity2"
+        )
         db.add(friend)
         await db.commit()
         await db.refresh(friend)
@@ -287,9 +297,7 @@ async def test_compute_activity_stats_aggregates_online_events(
                 )
             )
         db.add(
-            FriendPresenceEvent(
-                friend_id=friend.id, event_type="offline", occurred_at=occurred_at
-            )
+            FriendPresenceEvent(friend_id=friend.id, event_type="offline", occurred_at=occurred_at)
         )
         await db.commit()
 
@@ -313,7 +321,7 @@ async def test_status_update_first_sighting_does_not_log_avatar_change(
                 "currentAvatarThumbnailImageUrl": "https://example.com/a.png",
             }
         )
-        await friends_service.handle_friend_status_update(db, vrchat_user=user)
+        await friends_service.handle_friend_status_update(db, 1, vrchat_user=user)
 
         events = (await db.execute(select(FriendPresenceEvent))).scalars().all()
         assert [e.event_type for e in events] == ["status_change"]
@@ -323,14 +331,19 @@ async def test_status_update_logs_status_change_with_previous_status(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        friend = Friend(vrchat_user_id="usr_feed2", display_name="Feed2", activity_status="busy")
+        friend = Friend(
+            dashboard_user_id=1,
+            vrchat_user_id="usr_feed2",
+            display_name="Feed2",
+            activity_status="busy",
+        )
         db.add(friend)
         await db.commit()
 
         user = VRChatUser.model_validate(
             {"id": "usr_feed2", "displayName": "Feed2", "status": "join me"}
         )
-        await friends_service.handle_friend_status_update(db, vrchat_user=user)
+        await friends_service.handle_friend_status_update(db, 1, vrchat_user=user)
 
         event = (await db.execute(select(FriendPresenceEvent))).scalars().one()
         assert event.event_type == "status_change"
@@ -343,6 +356,7 @@ async def test_status_update_logs_avatar_change_when_url_actually_changes(
 ) -> None:
     async with db_session_factory() as db:
         friend = Friend(
+            dashboard_user_id=1,
             vrchat_user_id="usr_feed3",
             display_name="Feed3",
             activity_status="active",
@@ -359,7 +373,7 @@ async def test_status_update_logs_avatar_change_when_url_actually_changes(
                 "currentAvatarThumbnailImageUrl": "https://example.com/new.png",
             }
         )
-        await friends_service.handle_friend_status_update(db, vrchat_user=user)
+        await friends_service.handle_friend_status_update(db, 1, vrchat_user=user)
 
         events = (await db.execute(select(FriendPresenceEvent))).scalars().all()
         assert [e.event_type for e in events] == ["avatar_change"]
@@ -370,6 +384,7 @@ async def test_status_update_no_event_when_nothing_changed(
 ) -> None:
     async with db_session_factory() as db:
         friend = Friend(
+            dashboard_user_id=1,
             vrchat_user_id="usr_feed4",
             display_name="Feed4",
             activity_status="active",
@@ -386,7 +401,7 @@ async def test_status_update_no_event_when_nothing_changed(
                 "currentAvatarThumbnailImageUrl": "https://example.com/same.png",
             }
         )
-        await friends_service.handle_friend_status_update(db, vrchat_user=user)
+        await friends_service.handle_friend_status_update(db, 1, vrchat_user=user)
 
         events = (await db.execute(select(FriendPresenceEvent))).scalars().all()
         assert events == []
@@ -476,7 +491,7 @@ async def test_sync_friend_profile_details_stores_rank_language_bio_links_and_jo
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        db.add(Friend(vrchat_user_id="usr_a", display_name="A"))
+        db.add(Friend(dashboard_user_id=1, vrchat_user_id="usr_a", display_name="A"))
         await db.commit()
 
         profile = VRChatUser.model_validate(
@@ -490,7 +505,7 @@ async def test_sync_friend_profile_details_stores_rank_language_bio_links_and_jo
         )
         client = _FakeProfileClient({"usr_a": profile})
 
-        await friends_service.sync_friend_profile_details(db, client)  # type: ignore[arg-type]
+        await friends_service.sync_friend_profile_details(db, 1, client)  # type: ignore[arg-type]
 
         friend = (
             await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_a"))
@@ -505,13 +520,15 @@ async def test_sync_friend_profile_details_skips_friend_on_api_error(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        friend = Friend(vrchat_user_id="usr_b", display_name="B", trust_rank="User")
+        friend = Friend(
+            dashboard_user_id=1, vrchat_user_id="usr_b", display_name="B", trust_rank="User"
+        )
         db.add(friend)
         await db.commit()
 
         client = _FakeProfileClient({"usr_b": VRChatAPIError("boom")})
 
-        await friends_service.sync_friend_profile_details(db, client)  # type: ignore[arg-type]
+        await friends_service.sync_friend_profile_details(db, 1, client)  # type: ignore[arg-type]
 
         refreshed = (
             await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_b"))
@@ -524,17 +541,62 @@ async def test_get_friend_table_rows_sorts_by_requested_column(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        db.add(Friend(vrchat_user_id="usr_z", display_name="Zeta"))
-        db.add(Friend(vrchat_user_id="usr_a", display_name="Alpha"))
+        db.add(Friend(dashboard_user_id=1, vrchat_user_id="usr_z", display_name="Zeta"))
+        db.add(Friend(dashboard_user_id=1, vrchat_user_id="usr_a", display_name="Alpha"))
         await db.commit()
 
         rows_asc = await friends_service.get_friend_table_rows(
-            db, sort_by="display_name", sort_dir="asc"
+            db, 1, sort_by="display_name", sort_dir="asc"
         )
         rows_desc = await friends_service.get_friend_table_rows(
-            db, sort_by="display_name", sort_dir="desc"
+            db, 1, sort_by="display_name", sort_dir="desc"
         )
 
         assert [r.friend.display_name for r in rows_asc] == ["Alpha", "Zeta"]
         assert [r.friend.display_name for r in rows_desc] == ["Zeta", "Alpha"]
         assert all(r.join_count == 0 for r in rows_asc)
+
+
+async def test_friends_are_isolated_per_dashboard_user(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """同じVRChatユーザーを2人のダッシュボードユーザーがそれぞれフレンドとして持てること、
+    イベントや取得処理が他ユーザーの行に影響しないことを確認する。"""
+    async with db_session_factory() as db:
+        friend_u1 = Friend(dashboard_user_id=1, vrchat_user_id="usr_shared", display_name="S1")
+        friend_u2 = Friend(dashboard_user_id=2, vrchat_user_id="usr_shared", display_name="S2")
+        db.add_all([friend_u1, friend_u2])
+        await db.commit()
+
+        sender = FakeNotificationSender()
+        await friends_service.handle_friend_online(
+            db,
+            sender,
+            1,
+            vrchat_user_id="usr_shared",
+            display_name="S1",
+            location="wrld_x:1",
+            world_name="World X",
+        )
+
+        await db.refresh(friend_u1)
+        await db.refresh(friend_u2)
+        assert friend_u1.is_online is True
+        assert friend_u1.current_world_id == "wrld_x"
+        assert friend_u2.is_online is False
+        assert friend_u2.current_world_id is None
+
+        # 既存行を使い回すため、ユーザー1側に重複行は作られない。
+        rows = (
+            (await db.execute(select(Friend).where(Friend.vrchat_user_id == "usr_shared")))
+            .scalars()
+            .all()
+        )
+        assert len(rows) == 2
+
+        assert [f.id for f in await friends_service.list_friends(db, 1)] == [friend_u1.id]
+        assert [f.id for f in await friends_service.list_friends(db, 2)] == [friend_u2.id]
+        assert await friends_service.get_friend(db, 2, friend_u1.id) is None
+        found = await friends_service.get_friend(db, 1, friend_u1.id)
+        assert found is not None
+        assert found.id == friend_u1.id

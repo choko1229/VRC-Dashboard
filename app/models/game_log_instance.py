@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String
+from sqlalchemy import DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -20,6 +20,11 @@ class GameLogInstance(Base):
     __table_args__ = (Index("ix_game_log_instance_joined_at", "joined_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # 所有者（どのダッシュボードユーザーのVRChatアカウントのデータか）。複数人利用に対応するため、
+    # ユーザー単位のデータは全てこの列で分離する。
+    dashboard_user_id: Mapped[int] = mapped_column(
+        ForeignKey("dashboard_user.id", ondelete="CASCADE"), index=True
+    )
     location: Mapped[str] = mapped_column(String(150))
     world_id: Mapped[str | None] = mapped_column(String(100), default=None)
     world_name: Mapped[str | None] = mapped_column(String(255), default=None)

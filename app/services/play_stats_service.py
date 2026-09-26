@@ -71,8 +71,12 @@ class PlayStatsSummary:
     distinct_friend_count: int
 
 
-async def _get_all_instances(db: AsyncSession) -> list[GameLogInstance]:
-    result = await db.execute(select(GameLogInstance).order_by(GameLogInstance.joined_at))
+async def _get_all_instances(db: AsyncSession, user_id: int) -> list[GameLogInstance]:
+    result = await db.execute(
+        select(GameLogInstance)
+        .where(GameLogInstance.dashboard_user_id == user_id)
+        .order_by(GameLogInstance.joined_at)
+    )
     return list(result.scalars().all())
 
 
@@ -170,11 +174,15 @@ def get_top_worlds(
     return sorted(grouped.values(), key=lambda s: s.total_minutes, reverse=True)[:limit]
 
 
-async def get_all_friends_together(db: AsyncSession) -> list[FriendTogetherStats]:
+async def get_all_friends_together(db: AsyncSession, user_id: int) -> list[FriendTogetherStats]:
     """一緒に居たことがある全フレンドを、一緒に居た時間の多い順に返す（件数制限無し）。"""
-    friends = list((await db.execute(select(Friend))).scalars().all())
+    friends = list(
+        (await db.execute(select(Friend).where(Friend.dashboard_user_id == user_id)))
+        .scalars()
+        .all()
+    )
     co_presence = await game_log_service.get_friend_co_presence_stats(
-        db, [f.vrchat_user_id for f in friends]
+        db, user_id, [f.vrchat_user_id for f in friends]
     )
     ranked = [
         FriendTogetherStats(
@@ -199,11 +207,11 @@ class PlayStatsPage:
 
 
 async def get_play_stats_page(
-    db: AsyncSession, *, daily_days: int = 30, top_friends_limit: int = 10
+    db: AsyncSession, user_id: int, *, daily_days: int = 30, top_friends_limit: int = 10
 ) -> PlayStatsPage:
-    instances = await _get_all_instances(db)
-    all_friends_together = await get_all_friends_together(db)
-    now = await game_log_agent_token_service.get_effective_now(db)
+    instances = await _get_all_instances(db, user_id)
+    all_friends_together = await get_all_friends_together(db, user_id)
+    now = await game_log_agent_token_service.get_effective_now(db, user_id)
     summary = get_summary(instances, len(all_friends_together), now=now)
     return PlayStatsPage(
         summary=summary,

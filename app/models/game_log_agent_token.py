@@ -1,7 +1,8 @@
 """デスクトップエージェント（desktop_agent/）がゲームログ取り込みに使う認証トークン。
 
 1台のPC・1個のエージェントプロセスにつき1トークンを想定した多対応モデル（旧: app_settingに
-単一ハッシュを1個だけ保持する方式）。複数のPCでエージェントを動かしても、後から追加した
+単一ハッシュを1個だけ保持する方式）。トークンはペアリングを承認したダッシュボードユーザーに紐づき、
+そのトークンで取り込んだゲームログもそのユーザーの所有になる。複数のPCでエージェントを動かしても、後から追加した
 デバイスが既存デバイスのトークンを無効化してしまわないようにするため、テーブルとして管理する。
 
 ブラウザでのログイン→承認（device_auth_service参照）で発行されるほか、ハッシュのみDBに
@@ -13,7 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -23,6 +24,11 @@ class GameLogAgentToken(Base):
     __tablename__ = "game_log_agent_token"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # 所有者（どのダッシュボードユーザーのVRChatアカウントのデータか）。複数人利用に対応するため、
+    # ユーザー単位のデータは全てこの列で分離する。
+    dashboard_user_id: Mapped[int] = mapped_column(
+        ForeignKey("dashboard_user.id", ondelete="CASCADE"), index=True
+    )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     # ブラウザでの承認時に入力できる任意のラベル（例: 「自宅PC」）。
     label: Mapped[str | None] = mapped_column(String(100), default=None)

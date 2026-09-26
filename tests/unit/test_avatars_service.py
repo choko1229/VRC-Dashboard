@@ -25,7 +25,7 @@ async def test_sync_avatars_creates_and_updates(
                 }
             )
         ]
-        await avatars_service.sync_avatars_from_vrchat(db, avatars)
+        await avatars_service.sync_avatars_from_vrchat(db, 1, avatars)
 
         row = (
             await db.execute(select(Avatar).where(Avatar.vrchat_avatar_id == "avtr_1"))
@@ -40,7 +40,7 @@ async def test_sync_avatars_creates_and_updates(
                 {"id": "avtr_1", "name": "Renamed", "releaseStatus": "private"}
             )
         ]
-        await avatars_service.sync_avatars_from_vrchat(db, updated)
+        await avatars_service.sync_avatars_from_vrchat(db, 1, updated)
         rows = (await db.execute(select(Avatar))).scalars().all()
         assert len(rows) == 1
         assert rows[0].name == "Renamed"
@@ -69,7 +69,7 @@ async def test_sync_avatars_stores_per_platform_performance_and_metadata(
                 }
             )
         ]
-        await avatars_service.sync_avatars_from_vrchat(db, avatars)
+        await avatars_service.sync_avatars_from_vrchat(db, 1, avatars)
 
         row = (
             await db.execute(select(Avatar).where(Avatar.vrchat_avatar_id == "avtr_multi"))
@@ -89,6 +89,7 @@ async def test_update_avatar_fields_updates_only_given_fields(
     async with db_session_factory() as db:
         db.add(
             Avatar(
+                dashboard_user_id=1,
                 vrchat_avatar_id="avtr_edit",
                 name="Original",
                 description="Original description",
@@ -100,14 +101,14 @@ async def test_update_avatar_fields_updates_only_given_fields(
             await db.execute(select(Avatar).where(Avatar.vrchat_avatar_id == "avtr_edit"))
         ).scalar_one()
 
-        await avatars_service.update_avatar_fields(db, avatar.id, name="Renamed")
+        await avatars_service.update_avatar_fields(db, 1, avatar.id, name="Renamed")
         refreshed = await db.get(Avatar, avatar.id)
         assert refreshed is not None
         assert refreshed.name == "Renamed"
         assert refreshed.description == "Original description"
         assert refreshed.release_status == "private"
 
-        await avatars_service.update_avatar_fields(db, avatar.id, release_status="public")
+        await avatars_service.update_avatar_fields(db, 1, avatar.id, release_status="public")
         refreshed_again = await db.get(Avatar, avatar.id)
         assert refreshed_again is not None
         assert refreshed_again.release_status == "public"
@@ -118,23 +119,23 @@ async def test_notes_and_tags_flow(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        db.add(Avatar(vrchat_avatar_id="avtr_2", name="Test"))
+        db.add(Avatar(dashboard_user_id=1, vrchat_avatar_id="avtr_2", name="Test"))
         await db.commit()
         avatar = (
             await db.execute(select(Avatar).where(Avatar.vrchat_avatar_id == "avtr_2"))
         ).scalar_one()
 
-        await avatars_service.update_notes(db, avatar.id, "気に入っている点メモ")
+        await avatars_service.update_notes(db, 1, avatar.id, "気に入っている点メモ")
         refreshed = await db.get(Avatar, avatar.id)
         assert refreshed is not None
         assert refreshed.notes == "気に入っている点メモ"
 
-        tag = await avatars_service.create_tag(db, "衣装調整済み", "#22C55E")
-        await avatars_service.add_tag_to_avatar(db, avatar.id, tag.id)
+        tag = await avatars_service.create_tag(db, 1, "衣装調整済み", "#22C55E")
+        await avatars_service.add_tag_to_avatar(db, 1, avatar.id, tag.id)
         tag_ids = await avatars_service.get_avatar_tag_ids(db, avatar.id)
         assert tag_ids == {tag.id}
 
-        await avatars_service.remove_tag_from_avatar(db, avatar.id, tag.id)
+        await avatars_service.remove_tag_from_avatar(db, 1, avatar.id, tag.id)
         tag_ids_after = await avatars_service.get_avatar_tag_ids(db, avatar.id)
         assert tag_ids_after == set()
 
@@ -145,18 +146,37 @@ async def test_count_untagged_avatars(
     async with db_session_factory() as db:
         db.add_all(
             [
-                Avatar(vrchat_avatar_id="a1", name="A1"),
-                Avatar(vrchat_avatar_id="a2", name="A2"),
+                Avatar(dashboard_user_id=1, vrchat_avatar_id="a1", name="A1"),
+                Avatar(dashboard_user_id=1, vrchat_avatar_id="a2", name="A2"),
             ]
         )
         await db.commit()
         a1 = (await db.execute(select(Avatar).where(Avatar.vrchat_avatar_id == "a1"))).scalar_one()
 
-        tag = Tag(name="準備完了")
+        tag = Tag(dashboard_user_id=1, name="準備完了")
         db.add(tag)
         await db.commit()
         await db.refresh(tag)
-        await avatars_service.add_tag_to_avatar(db, a1.id, tag.id)
+        await avatars_service.add_tag_to_avatar(db, 1, a1.id, tag.id)
 
-        untagged = await avatars_service.count_untagged_avatars(db)
+        untagged = await avatars_service.count_untagged_avatars(db, 1)
         assert untagged == 1
+
+
+async def test_add_tag_to_avatar_ignores_other_users_tag(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """他ユーザーのタグを自分のアバターに付けようとしても何も起きないこと。"""
+    async with db_session_factory() as db:
+        avatar = Avatar(dashboard_user_id=1, vrchat_avatar_id="avtr_mine", name="Mine")
+        db.add(avatar)
+        await db.commit()
+        await db.refresh(avatar)
+
+        other_users_tag = await avatars_service.create_tag(db, 2, "他人のタグ", None)
+        await avatars_service.add_tag_to_avatar(db, 1, avatar.id, other_users_tag.id)
+        assert await avatars_service.get_avatar_tag_ids(db, avatar.id) == set()
+
+        # タグの所有者側から操作しても、他人のアバターには付けられない。
+        await avatars_service.add_tag_to_avatar(db, 2, avatar.id, other_users_tag.id)
+        assert await avatars_service.get_avatar_tag_ids(db, avatar.id) == set()

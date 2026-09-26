@@ -6,7 +6,10 @@ BOT側に将来実装してもらう想定（実装は本リポジトリのス�
     POST {bot_url}/notify
     Authorization: Bearer {shared_secret}
     Content-Type: application/json
-    Body: NotificationPayload
+    Body: NotificationPayload + {"recipient_discord_user_id": "<通知先のDiscordユーザーID>"}
+
+複数人利用に対応するため、通知はダッシュボードユーザー単位で発生する（各ユーザーのフレンドの
+通知設定・Pipeline接続に基づく）。BOT側は`recipient_discord_user_id`宛てにDM等で配信する想定。
 
 BOT側が未実装の間はタイムアウト/接続エラーになるが、これはログに記録するのみで
 Pipelineリスナーやダッシュボード本体の動作をブロックしない。
@@ -24,9 +27,17 @@ logger = logging.getLogger(__name__)
 
 
 class DiscordNotifySender:
-    def __init__(self, *, bot_url: str, shared_secret: str, timeout: float = 10.0) -> None:
+    def __init__(
+        self,
+        *,
+        bot_url: str,
+        shared_secret: str,
+        recipient_discord_user_id: str | None = None,
+        timeout: float = 10.0,
+    ) -> None:
         self._bot_url = bot_url.rstrip("/")
         self._shared_secret = shared_secret
+        self._recipient_discord_user_id = recipient_discord_user_id
         self._timeout = timeout
 
     async def send(self, payload: NotificationPayload) -> None:
@@ -39,7 +50,10 @@ class DiscordNotifySender:
                 response = await client.post(
                     f"{self._bot_url}/notify",
                     headers={"Authorization": f"Bearer {self._shared_secret}"},
-                    json=payload.model_dump(mode="json"),
+                    json={
+                        **payload.model_dump(mode="json"),
+                        "recipient_discord_user_id": self._recipient_discord_user_id,
+                    },
                 )
                 response.raise_for_status()
         except httpx.HTTPError as exc:

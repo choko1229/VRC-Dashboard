@@ -27,7 +27,7 @@ async def test_ingest_notification_v1_invite_extracts_location(
             "details": {"worldId": "wrld_x", "instanceId": "12345~region(jp)"},
             "created_at": "2026-08-23T10:00:00Z",
         }
-        await svc.ingest(db, pipeline_event="notification", content=content)
+        await svc.ingest(db, 1, pipeline_event="notification", content=content)
 
         row = (
             await db.execute(
@@ -47,8 +47,8 @@ async def test_ingest_is_idempotent_on_duplicate_id(
 ) -> None:
     async with db_session_factory() as db:
         content = {"id": "not_dup", "type": "boop", "senderUsername": "Bob"}
-        await svc.ingest(db, pipeline_event="notification", content=content)
-        await svc.ingest(db, pipeline_event="notification", content=content)
+        await svc.ingest(db, 1, pipeline_event="notification", content=content)
+        await svc.ingest(db, 1, pipeline_event="notification", content=content)
 
         rows = (
             (
@@ -68,7 +68,7 @@ async def test_ingest_unknown_pipeline_event_is_ignored(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        await svc.ingest(db, pipeline_event="some-future-event", content={"id": "x"})
+        await svc.ingest(db, 1, pipeline_event="some-future-event", content={"id": "x"})
         rows = (await db.execute(select(VRChatNotification))).scalars().all()
         assert rows == []
 
@@ -79,6 +79,7 @@ async def test_ingest_economy_update_creates_synthetic_row(
     async with db_session_factory() as db:
         await svc.ingest(
             db,
+            1,
             pipeline_event="economy-update",
             content={"description": "600 credits have been added to your account."},
         )
@@ -93,10 +94,10 @@ async def test_hide_sync_event_marks_existing_row_hidden(
 ) -> None:
     async with db_session_factory() as db:
         await svc.ingest(
-            db, pipeline_event="notification", content={"id": "not_hide", "type": "message"}
+            db, 1, pipeline_event="notification", content={"id": "not_hide", "type": "message"}
         )
         await svc.ingest(
-            db, pipeline_event="hide-notification", content={"notificationId": "not_hide"}
+            db, 1, pipeline_event="hide-notification", content={"notificationId": "not_hide"}
         )
 
         row = (
@@ -114,13 +115,13 @@ async def test_get_notifications_filters_by_type_and_excludes_hidden(
 ) -> None:
     async with db_session_factory() as db:
         await svc.ingest(
-            db, pipeline_event="notification", content={"id": "not_a", "type": "invite"}
+            db, 1, pipeline_event="notification", content={"id": "not_a", "type": "invite"}
         )
         await svc.ingest(
-            db, pipeline_event="notification", content={"id": "not_b", "type": "boop"}
+            db, 1, pipeline_event="notification", content={"id": "not_b", "type": "boop"}
         )
         await svc.ingest(
-            db, pipeline_event="notification", content={"id": "not_c", "type": "invite"}
+            db, 1, pipeline_event="notification", content={"id": "not_c", "type": "invite"}
         )
         row_c = (
             await db.execute(
@@ -132,7 +133,7 @@ async def test_get_notifications_filters_by_type_and_excludes_hidden(
         row_c.is_hidden = True
         await db.commit()
 
-        entries, has_more = await svc.get_notifications(db, notification_type="invite")
+        entries, has_more = await svc.get_notifications(db, 1, notification_type="invite")
         assert has_more is False
         assert [e.vrchat_notification_id for e in entries] == ["not_a"]
 
@@ -143,16 +144,18 @@ async def test_get_notifications_search_matches_sender_and_message(
     async with db_session_factory() as db:
         await svc.ingest(
             db,
+            1,
             pipeline_event="notification",
             content={"id": "not_x", "type": "boop", "senderUsername": "Carol"},
         )
         await svc.ingest(
             db,
+            1,
             pipeline_event="notification",
             content={"id": "not_y", "type": "boop", "senderUsername": "Dave"},
         )
 
-        entries, _ = await svc.get_notifications(db, q="carol")
+        entries, _ = await svc.get_notifications(db, 1, q="carol")
         assert [e.vrchat_notification_id for e in entries] == ["not_x"]
 
 
@@ -162,6 +165,7 @@ async def test_get_notifications_sort_dir_toggles_order(
     async with db_session_factory() as db:
         await svc.ingest(
             db,
+            1,
             pipeline_event="notification",
             content={
                 "id": "not_old",
@@ -171,6 +175,7 @@ async def test_get_notifications_sort_dir_toggles_order(
         )
         await svc.ingest(
             db,
+            1,
             pipeline_event="notification",
             content={
                 "id": "not_new",
@@ -179,8 +184,8 @@ async def test_get_notifications_sort_dir_toggles_order(
             },
         )
 
-        desc_entries, _ = await svc.get_notifications(db, sort_dir="desc")
-        asc_entries, _ = await svc.get_notifications(db, sort_dir="asc")
+        desc_entries, _ = await svc.get_notifications(db, 1, sort_dir="desc")
+        asc_entries, _ = await svc.get_notifications(db, 1, sort_dir="asc")
         assert [e.vrchat_notification_id for e in desc_entries] == ["not_new", "not_old"]
         assert [e.vrchat_notification_id for e in asc_entries] == ["not_old", "not_new"]
 
@@ -189,7 +194,7 @@ async def test_enqueue_join_command_creates_pending_agent_command(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        await svc.enqueue_join_command(db, location="wrld_x:12345")
+        await svc.enqueue_join_command(db, 1, location="wrld_x:12345")
 
         command = (await db.execute(select(AgentCommand))).scalars().one()
         assert command.command_type == "join_instance"
@@ -203,6 +208,7 @@ async def test_accept_join_action_enqueues_command_without_client(
     async with db_session_factory() as db:
         await svc.ingest(
             db,
+            1,
             pipeline_event="notification",
             content={
                 "id": "not_invite",
@@ -222,6 +228,8 @@ async def test_accept_join_action_enqueues_command_without_client(
 
         command = (await db.execute(select(AgentCommand))).scalars().one()
         assert json.loads(command.payload_json) == {"location": "wrld_x:1"}
+        # 通知の所有者に対するコマンドとして登録される。
+        assert command.dashboard_user_id == 1
         # 参加系アクションは通知自体を隠さない(再送できるように残す)。
         assert row.is_hidden is False
 
@@ -231,7 +239,7 @@ async def test_decline_without_client_still_hides_row(
 ) -> None:
     async with db_session_factory() as db:
         await svc.ingest(
-            db, pipeline_event="notification", content={"id": "not_decline", "type": "message"}
+            db, 1, pipeline_event="notification", content={"id": "not_decline", "type": "message"}
         )
         row = (
             await db.execute(
@@ -244,3 +252,41 @@ async def test_decline_without_client_still_hides_row(
         await svc.decline(db, None, row)
 
         assert row.is_hidden is True
+
+
+async def test_same_notification_id_is_stored_per_dashboard_user(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """同じvrchat_notification_idでもユーザーごとに別の行として取り込み、一覧も分離されること。"""
+    async with db_session_factory() as db:
+        content = {"id": "not_shared", "type": "boop", "senderUsername": "Eve"}
+        await svc.ingest(db, 1, pipeline_event="notification", content=content)
+        await svc.ingest(db, 2, pipeline_event="notification", content=content)
+        await svc.ingest(
+            db, 2, pipeline_event="notification", content={"id": "not_only_2", "type": "boop"}
+        )
+
+        rows = (
+            (
+                await db.execute(
+                    select(VRChatNotification).where(
+                        VRChatNotification.vrchat_notification_id == "not_shared"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert sorted(r.dashboard_user_id for r in rows) == [1, 2]
+
+        entries_u1, _ = await svc.get_notifications(db, 1)
+        entries_u2, _ = await svc.get_notifications(db, 2)
+        assert [e.vrchat_notification_id for e in entries_u1] == ["not_shared"]
+        assert sorted(e.vrchat_notification_id for e in entries_u2) == [
+            "not_only_2",
+            "not_shared",
+        ]
+
+        row_u1 = next(r for r in rows if r.dashboard_user_id == 1)
+        assert await svc.get_notification(db, 2, row_u1.id) is None
+        assert await svc.get_notification(db, 1, row_u1.id) is not None

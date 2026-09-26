@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -12,9 +12,17 @@ from app.db.base import Base
 
 class Avatar(Base):
     __tablename__ = "avatar"
+    __table_args__ = (
+        UniqueConstraint("dashboard_user_id", "vrchat_avatar_id", name="uq_avatar_owner"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    vrchat_avatar_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    # 所有者（どのダッシュボードユーザーのVRChatアカウントのデータか）。複数人利用に対応するため、
+    # ユーザー単位のデータは全てこの列で分離する。
+    dashboard_user_id: Mapped[int] = mapped_column(
+        ForeignKey("dashboard_user.id", ondelete="CASCADE"), index=True
+    )
+    vrchat_avatar_id: Mapped[str] = mapped_column(String(100), index=True)
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(default=None)
     thumbnail_image_url: Mapped[str | None] = mapped_column(default=None)

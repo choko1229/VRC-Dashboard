@@ -11,21 +11,34 @@ from app.models.schedule_event import ScheduleEvent
 from app.schemas.vrchat import VRChatCalendarEvent
 
 
+async def get_event(db: AsyncSession, user_id: int, event_id: int) -> ScheduleEvent | None:
+    event = await db.get(ScheduleEvent, event_id)
+    if event is None or event.dashboard_user_id != user_id:
+        return None
+    return event
+
+
 async def list_events_for_range(
-    db: AsyncSession, start_date: date, end_date: date
+    db: AsyncSession, user_id: int, start_date: date, end_date: date
 ) -> list[ScheduleEvent]:
     result = await db.execute(
         select(ScheduleEvent)
-        .where(ScheduleEvent.event_date >= start_date, ScheduleEvent.event_date <= end_date)
+        .where(
+            ScheduleEvent.dashboard_user_id == user_id,
+            ScheduleEvent.event_date >= start_date,
+            ScheduleEvent.event_date <= end_date,
+        )
         .order_by(ScheduleEvent.event_date, ScheduleEvent.start_time)
     )
     return list(result.scalars().all())
 
 
-async def list_events_for_day(db: AsyncSession, event_date: date) -> list[ScheduleEvent]:
+async def list_events_for_day(
+    db: AsyncSession, user_id: int, event_date: date
+) -> list[ScheduleEvent]:
     result = await db.execute(
         select(ScheduleEvent)
-        .where(ScheduleEvent.event_date == event_date)
+        .where(ScheduleEvent.dashboard_user_id == user_id, ScheduleEvent.event_date == event_date)
         .order_by(ScheduleEvent.start_time)
     )
     return list(result.scalars().all())
@@ -33,6 +46,7 @@ async def list_events_for_day(db: AsyncSession, event_date: date) -> list[Schedu
 
 async def create_event(
     db: AsyncSession,
+    user_id: int,
     *,
     title: str,
     event_date: date,
@@ -43,6 +57,7 @@ async def create_event(
     memo: str | None,
 ) -> ScheduleEvent:
     event = ScheduleEvent(
+        dashboard_user_id=user_id,
         title=title,
         event_date=event_date,
         start_time=start_time,
@@ -60,6 +75,7 @@ async def create_event(
 
 async def update_event(
     db: AsyncSession,
+    user_id: int,
     event_id: int,
     *,
     title: str,
@@ -70,7 +86,7 @@ async def update_event(
     avatar_id: int | None,
     memo: str | None,
 ) -> ScheduleEvent | None:
-    event = await db.get(ScheduleEvent, event_id)
+    event = await get_event(db, user_id, event_id)
     if event is None:
         return None
     event.title = title
@@ -84,21 +100,24 @@ async def update_event(
     return event
 
 
-async def delete_event(db: AsyncSession, event_id: int) -> None:
-    event = await db.get(ScheduleEvent, event_id)
+async def delete_event(db: AsyncSession, user_id: int, event_id: int) -> None:
+    event = await get_event(db, user_id, event_id)
     if event is not None:
         await db.delete(event)
         await db.commit()
 
 
 async def import_calendar_events(
-    db: AsyncSession, calendar_events: list[VRChatCalendarEvent]
+    db: AsyncSession, user_id: int, calendar_events: list[VRChatCalendarEvent]
 ) -> int:
     """VRChatカレンダーイベントをvrchat_event_idでupsertする。戻り値は新規取込件数。"""
     imported = 0
     for calendar_event in calendar_events:
         result = await db.execute(
-            select(ScheduleEvent).where(ScheduleEvent.vrchat_event_id == calendar_event.id)
+            select(ScheduleEvent).where(
+                ScheduleEvent.dashboard_user_id == user_id,
+                ScheduleEvent.vrchat_event_id == calendar_event.id,
+            )
         )
         row = result.scalar_one_or_none()
         event_date = calendar_event.starts_at.date() if calendar_event.starts_at else date.today()
@@ -107,6 +126,7 @@ async def import_calendar_events(
         if row is None:
             db.add(
                 ScheduleEvent(
+                    dashboard_user_id=user_id,
                     title=calendar_event.title,
                     event_date=event_date,
                     start_time=start_time,

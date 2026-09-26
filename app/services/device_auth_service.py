@@ -3,8 +3,9 @@
 OAuth 2.0 Device Authorization Grant（RFC 8628）に似た方式:
 1. エージェントが`POST /api/game-log/agent/pair`でペアリングコード一式を取得する。
 2. エージェントはverification_uri（コード入り）を既定のブラウザで開く。
-3. ダッシュボードに管理者としてログイン中のユーザーがコードを確認して承認する
-   （`POST /game-log/device/approve`）。承認するとgame_log_agent_tokenが新規発行される。
+3. ダッシュボードにログイン中のユーザーがコードを確認して承認する
+   （`POST /game-log/device/approve`）。承認すると、承認したユーザーを所有者とする
+   game_log_agent_tokenが新規発行される（そのPCのゲームログは承認したユーザーのものになる）。
 4. エージェントは`POST /api/game-log/agent/pair/poll`を数秒おきに叩き、承認されたら
    発行されたトークンを受け取って以降の`POST /api/game-log/events`等の認証に使う。
 
@@ -81,11 +82,13 @@ def find_by_user_code(user_code: str) -> DeviceCodeEntry | None:
     return None
 
 
-async def approve(db: AsyncSession, user_code: str, *, label: str | None = None) -> bool:
+async def approve(
+    db: AsyncSession, user_code: str, *, user_id: int, label: str | None = None
+) -> bool:
     entry = find_by_user_code(user_code)
     if entry is None:
         return False
-    raw_token = await game_log_agent_token_service.create_token(db, label=label)
+    raw_token = await game_log_agent_token_service.create_token(db, user_id, label=label)
     entry.status = "approved"
     entry.issued_token = raw_token
     return True

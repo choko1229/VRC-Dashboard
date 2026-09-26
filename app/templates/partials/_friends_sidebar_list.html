@@ -23,6 +23,9 @@
 </li>
 {% endmacro %}
 
+{% if groups is none %}
+<p class="placeholder">VRChatにログインするとフレンドが表示されます。</p>
+{% else %}
 {% set online_total = groups.online_other|length + groups.instance_groups|sum(attribute="friend_count") %}
 {% if not online_total and not groups.active and not groups.offline %}
 <p class="placeholder">フレンドがいません。</p>
@@ -63,4 +66,5 @@
         {% for friend in groups.offline %}{{ friend_row(friend, false) }}{% endfor %}
     </ul>
 </details>
+{% endif %}
 {% endif %}

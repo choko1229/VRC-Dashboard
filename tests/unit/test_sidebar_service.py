@@ -14,6 +14,7 @@ async def test_groups_friends_by_state(
     async with db_session_factory() as db:
         db.add(
             Friend(
+                dashboard_user_id=1,
                 vrchat_user_id="usr_online",
                 display_name="Online太郎",
                 is_online=True,
@@ -24,6 +25,7 @@ async def test_groups_friends_by_state(
         )
         db.add(
             Friend(
+                dashboard_user_id=1,
                 vrchat_user_id="usr_active",
                 display_name="Active花子",
                 is_online=True,
@@ -32,6 +34,7 @@ async def test_groups_friends_by_state(
         )
         db.add(
             Friend(
+                dashboard_user_id=1,
                 vrchat_user_id="usr_offline",
                 display_name="Offline次郎",
                 is_online=False,
@@ -40,7 +43,7 @@ async def test_groups_friends_by_state(
         )
         await db.commit()
 
-        groups = await sidebar_service.get_friend_sidebar_groups(db)
+        groups = await sidebar_service.get_friend_sidebar_groups(db, 1)
 
         # インスタンスに1人しかいないため、グループの見出しは作らずonline_otherに入る。
         assert groups.instance_groups == []
@@ -60,6 +63,7 @@ async def test_friend_limit_prioritizes_online_over_offline(
         for i in range(extra_offline_count):
             db.add(
                 Friend(
+                    dashboard_user_id=1,
                     vrchat_user_id=f"usr_offline_{i}",
                     display_name=f"Z_offline_{i:03d}",
                     is_online=False,
@@ -68,6 +72,7 @@ async def test_friend_limit_prioritizes_online_over_offline(
             )
         db.add(
             Friend(
+                dashboard_user_id=1,
                 vrchat_user_id="usr_online_priority",
                 display_name="A_online",
                 is_online=True,
@@ -77,7 +82,7 @@ async def test_friend_limit_prioritizes_online_over_offline(
         )
         await db.commit()
 
-        groups = await sidebar_service.get_friend_sidebar_groups(db)
+        groups = await sidebar_service.get_friend_sidebar_groups(db, 1)
 
         total_returned = (
             sum(g.friend_count for g in groups.instance_groups)
@@ -100,6 +105,7 @@ async def test_groups_friends_by_instance_known_first_unknown_after(
     async with db_session_factory() as db:
         db.add(
             Friend(
+                dashboard_user_id=1,
                 vrchat_user_id="usr_same_1",
                 display_name="同室A",
                 is_online=True,
@@ -110,6 +116,7 @@ async def test_groups_friends_by_instance_known_first_unknown_after(
         )
         db.add(
             Friend(
+                dashboard_user_id=1,
                 vrchat_user_id="usr_same_2",
                 display_name="同室B",
                 is_online=True,
@@ -120,6 +127,7 @@ async def test_groups_friends_by_instance_known_first_unknown_after(
         )
         db.add(
             Friend(
+                dashboard_user_id=1,
                 vrchat_user_id="usr_elsewhere",
                 display_name="別室C",
                 is_online=True,
@@ -130,6 +138,7 @@ async def test_groups_friends_by_instance_known_first_unknown_after(
         )
         db.add(
             Friend(
+                dashboard_user_id=1,
                 vrchat_user_id="usr_private",
                 display_name="非公開D",
                 is_online=True,
@@ -139,7 +148,7 @@ async def test_groups_friends_by_instance_known_first_unknown_after(
         )
         await db.commit()
 
-        groups = await sidebar_service.get_friend_sidebar_groups(db)
+        groups = await sidebar_service.get_friend_sidebar_groups(db, 1)
 
         # 2人以上いるインスタンスのみグループ化される。1人だけのインスタンス
         # (usr_elsewhere)とインスタンス不明(usr_private)は、見出し無しの末尾にまとまる。

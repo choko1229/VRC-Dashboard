@@ -2,6 +2,7 @@
 
 pywebpushは同期(requestsベース)のためasyncio.to_threadでイベントループをブロックしないようにする。
 購読が失効している(410 Gone / 404)場合はDBから削除する。
+複数人利用に対応するため、通知の宛先ユーザー（dashboard_user_id）の購読にだけ送信する。
 """
 
 from __future__ import annotations
@@ -27,8 +28,10 @@ class WebPushSender:
         vapid_private_key: str,
         vapid_public_key: str,
         vapid_contact_email: str,
+        dashboard_user_id: int,
     ) -> None:
         self._session_factory = session_factory
+        self._dashboard_user_id = dashboard_user_id
         self._vapid_private_key = vapid_private_key
         self._vapid_public_key = vapid_public_key
         self._vapid_contact_email = vapid_contact_email
@@ -39,7 +42,7 @@ class WebPushSender:
             return
 
         async with self._session_factory() as db:
-            subscriptions = await webpush_service.list_subscriptions(db)
+            subscriptions = await webpush_service.list_subscriptions(db, self._dashboard_user_id)
 
         body = json.dumps(
             {

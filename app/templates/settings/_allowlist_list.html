@@ -1,17 +1,23 @@
 {% from "partials/icons.html" import icon_trash %}
+{% set current_user = current_dashboard_user(request) %}
 <ul id="allowlist-list" class="allowlist-list">
+    {% if error_message %}<li class="error-text">{{ error_message }}</li>{% endif %}
     {% for entry in entries %}
     <li>
         <span>{{ entry.discord_user_id }}</span>
         {% if entry.label %}<span class="text-muted">({{ entry.label }})</span>{% endif %}
+        {% if current_user and entry.discord_user_id == current_user.discord_user_id %}
+        <span class="text-muted">（自分）</span>
+        {% else %}
         <button
             class="icon-btn"
             title="削除"
             hx-delete="/settings/allowlist/{{ entry.id }}"
             hx-target="#allowlist-list"
             hx-swap="outerHTML"
-            hx-confirm="このユーザーの許可を取り消しますか？"
+            hx-confirm="このユーザーの許可を取り消しますか？ログイン中のセッション・VRChat連携・連携ツールも即座に無効になります。"
         >{{ icon_trash(16) }}</button>
+        {% endif %}
     </li>
     {% else %}
     <li class="placeholder">まだ登録されていません。</li>

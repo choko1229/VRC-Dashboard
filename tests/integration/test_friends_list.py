@@ -4,31 +4,18 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.deps import get_current_user
-from app.models.dashboard_user import DashboardUser
 from app.models.friend import Friend
 from app.models.friend_group import FriendGroup
 from app.models.friend_group_membership import FriendGroupMembership
+from tests.fakes import login_as
 
 
 def _login(fastapi_app: FastAPI) -> None:
-    async def fake_current_user() -> DashboardUser:
-        return DashboardUser(
-            id=1,
-            discord_user_id="1",
-            discord_username="tester",
-            is_admin=False,
-            first_login_at=datetime.now(UTC),
-            last_login_at=datetime.now(UTC),
-        )
-
-    fastapi_app.dependency_overrides[get_current_user] = fake_current_user
+    login_as(fastapi_app, user_id=1)
 
 
 async def _add_to_group(db: AsyncSession, vrchat_user_id: str, group_name: str) -> None:
@@ -37,7 +24,7 @@ async def _add_to_group(db: AsyncSession, vrchat_user_id: str, group_name: str) 
     group_result = await db.execute(select(FriendGroup).where(FriendGroup.name == group_name))
     group = group_result.scalar_one_or_none()
     if group is None:
-        group = FriendGroup(name=group_name, source="local")
+        group = FriendGroup(dashboard_user_id=1, name=group_name, source="local")
         db.add(group)
         await db.commit()
         await db.refresh(group)
@@ -57,6 +44,7 @@ async def test_friends_page_shows_online_and_offline_sections(
     async with db_session_factory() as db:
         db.add(
             Friend(
+                dashboard_user_id=1,
                 vrchat_user_id="usr_online",
                 display_name="オンライン花子",
                 is_online=True,
@@ -67,6 +55,7 @@ async def test_friends_page_shows_online_and_offline_sections(
         )
         db.add(
             Friend(
+                dashboard_user_id=1,
                 vrchat_user_id="usr_offline",
                 display_name="オフライン次郎",
                 is_online=False,
@@ -90,6 +79,7 @@ async def test_favorite_friend_shown_only_in_favorites_section_even_if_offline(
     async with db_session_factory() as db:
         db.add(
             Friend(
+                dashboard_user_id=1,
                 vrchat_user_id="usr_fav_offline",
                 display_name="お気に入りオフライン",
                 is_online=False,
@@ -113,7 +103,14 @@ async def test_friend_detail_modal_returns_bare_fragment(
 ) -> None:
     _login(fastapi_app)
     async with db_session_factory() as db:
-        db.add(Friend(vrchat_user_id="usr_modal", display_name="モーダル太郎", is_online=False))
+        db.add(
+            Friend(
+                dashboard_user_id=1,
+                vrchat_user_id="usr_modal",
+                display_name="モーダル太郎",
+                is_online=False,
+            )
+        )
         await db.commit()
         from sqlalchemy import select
 
@@ -136,3 +133,61 @@ async def test_friend_detail_modal_not_found(fastapi_app: FastAPI, client: Async
 
     assert response.status_code == 404
     assert "見つかりません" in response.text
+
+
+async def _seed_friend(
+    db_session_factory: async_sessionmaker[AsyncSession],
+    *,
+    user_id: int,
+    vrchat_user_id: str,
+    display_name: str,
+) -> int:
+    async with db_session_factory() as db:
+        friend = Friend(
+            dashboard_user_id=user_id,
+            vrchat_user_id=vrchat_user_id,
+            display_name=display_name,
+            is_online=False,
+            online_state="offline",
+        )
+        db.add(friend)
+        await db.commit()
+        await db.refresh(friend)
+        return friend.id
+
+
+async def test_friends_page_shows_only_own_friends(
+    fastapi_app: FastAPI, client: AsyncClient, db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """複数人利用: 他のダッシュボードユーザーのフレンドは一覧に表示されない。"""
+    await _seed_friend(
+        db_session_factory, user_id=1, vrchat_user_id="usr_of_user1", display_name="ユーザー1の友達"
+    )
+    await _seed_friend(
+        db_session_factory, user_id=2, vrchat_user_id="usr_of_user2", display_name="ユーザー2の友達"
+    )
+    login_as(fastapi_app, user_id=2)
+
+    response = await client.get("/friends")
+
+    assert response.status_code == 200
+    assert "ユーザー2の友達" in response.text
+    assert "ユーザー1の友達" not in response.text
+
+
+async def test_other_users_friend_detail_is_not_found(
+    fastapi_app: FastAPI, client: AsyncClient, db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """複数人利用: 他ユーザーのフレンドIDを直接指定しても詳細は取得できない（404）。"""
+    other_friend_id = await _seed_friend(
+        db_session_factory, user_id=1, vrchat_user_id="usr_secret", display_name="秘密の友達"
+    )
+    login_as(fastapi_app, user_id=2)
+
+    page_response = await client.get(f"/friends/{other_friend_id}")
+    modal_response = await client.get(f"/friends/{other_friend_id}/modal")
+
+    assert page_response.status_code == 404
+    assert "秘密の友達" not in page_response.text
+    assert modal_response.status_code == 404
+    assert "秘密の友達" not in modal_response.text

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.dashboard_session import DashboardSession
 from app.models.dashboard_user import DashboardUser
 from app.models.discord_allowlist_entry import DiscordAllowlistEntry
+from app.models.game_log_agent_token import GameLogAgentToken
+from app.models.vrchat_session import VRChatSession
 from app.schemas.discord import DiscordUser
 
 
@@ -82,3 +85,41 @@ async def upsert_dashboard_user(
     await db.commit()
     await db.refresh(user)
     return user
+
+
+async def revoke_access(db: AsyncSession, discord_user_id: str) -> int | None:
+    """許可リストから外されたユーザーのアクセスを即時に断つ。
+
+    ダッシュボードのログインセッションを全て失効させ、VRChatセッションを無効化し
+    （呼び出し側でPipeline接続も停止すること）、デスクトップエージェントのトークンを削除する。
+    フレンド・アバター等のデータは残す（許可リストへ再登録すれば、Discord/VRChatへの
+    再ログインとエージェントの再ペアリングだけで元どおり使える）。
+    戻り値は該当するダッシュボードユーザーのID（一度もログインしていなければNone）。
+    """
+    user = (
+        await db.execute(
+            select(DashboardUser).where(DashboardUser.discord_user_id == discord_user_id)
+        )
+    ).scalar_one_or_none()
+    if user is None:
+        return None
+
+    now = datetime.now(UTC)
+    await db.execute(
+        update(DashboardSession)
+        .where(
+            DashboardSession.dashboard_user_id == user.id,
+            DashboardSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
+    )
+    await db.execute(
+        update(VRChatSession)
+        .where(VRChatSession.dashboard_user_id == user.id, VRChatSession.is_valid.is_(True))
+        .values(is_valid=False)
+    )
+    await db.execute(
+        delete(GameLogAgentToken).where(GameLogAgentToken.dashboard_user_id == user.id)
+    )
+    await db.commit()
+    return user.id

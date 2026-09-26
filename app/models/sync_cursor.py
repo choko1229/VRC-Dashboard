@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -13,6 +13,10 @@ from app.db.base import Base
 class SyncCursor(Base):
     __tablename__ = "sync_cursor"
 
+    # 同期はダッシュボードユーザーごとに各自のVRChatアカウントで行うため、所有者単位で管理する。
+    dashboard_user_id: Mapped[int] = mapped_column(
+        ForeignKey("dashboard_user.id", ondelete="CASCADE"), primary_key=True
+    )
     # "avatars" / "vrchat_calendar" / "friends_bootstrap" 等
     resource_name: Mapped[str] = mapped_column(String(50), primary_key=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)

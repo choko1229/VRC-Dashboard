@@ -11,10 +11,11 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_cipher, get_current_user
+from app.core.deps import get_cipher, get_current_vrchat_user
 from app.core.security import SecretCipher
 from app.core.templating import templates
 from app.db.session import get_db
+from app.models.dashboard_user import DashboardUser
 from app.models.friend import Friend
 from app.models.friend_group import FriendGroup
 from app.models.friend_group_membership import FriendGroupMembership
@@ -22,17 +23,16 @@ from app.models.friend_notification_pref import FriendNotificationPref
 from app.models.friend_presence_event import FriendPresenceEvent
 from app.schemas.vrchat import parse_trust_rank, resolve_profile_image_url
 from app.services import (
-    app_config_service,
     friends_service,
     vrchat_session_service,
     vrchat_sync_service,
 )
 from app.services.friends_service import FriendInstanceGroup
-from app.services.vrchat.client import VRChatAPIError, VRChatClient
+from app.services.vrchat.client import VRChatAPIError
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/friends", dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/friends", dependencies=[Depends(get_current_vrchat_user)])
 
 _HISTORY_PAGE_SIZE = 50
 
@@ -54,11 +54,15 @@ class FriendSections:
     offline: list[Friend]
 
 
-async def _fetch_friend_sections(db: AsyncSession) -> FriendSections:
-    all_friends_result = await db.execute(select(Friend).order_by(Friend.display_name))
-    all_friends = list(all_friends_result.scalars().all())
+async def _fetch_friend_sections(db: AsyncSession, user_id: int) -> FriendSections:
+    all_friends = await friends_service.list_friends(db, user_id)
 
-    favorite_ids_result = await db.execute(select(FriendGroupMembership.friend_id).distinct())
+    favorite_ids_result = await db.execute(
+        select(FriendGroupMembership.friend_id)
+        .join(Friend, FriendGroupMembership.friend_id == Friend.id)
+        .where(Friend.dashboard_user_id == user_id)
+        .distinct()
+    )
     favorite_ids = set(favorite_ids_result.scalars().all())
 
     favorites = [f for f in all_friends if f.id in favorite_ids]
@@ -79,11 +83,20 @@ async def _fetch_friend_sections(db: AsyncSession) -> FriendSections:
     )
 
 
-async def _fetch_groups(db: AsyncSession) -> list[FriendGroup]:
+async def _fetch_groups(db: AsyncSession, user_id: int) -> list[FriendGroup]:
     result = await db.execute(
-        select(FriendGroup).order_by(FriendGroup.sort_order, FriendGroup.name)
+        select(FriendGroup)
+        .where(FriendGroup.dashboard_user_id == user_id)
+        .order_by(FriendGroup.sort_order, FriendGroup.name)
     )
     return list(result.scalars().all())
+
+
+async def _get_group(db: AsyncSession, user_id: int, group_id: int) -> FriendGroup | None:
+    group = await db.get(FriendGroup, group_id)
+    if group is None or group.dashboard_user_id != user_id:
+        return None
+    return group
 
 
 async def _fetch_friend_group_ids(db: AsyncSession, friend_id: int) -> set[int]:
@@ -102,24 +115,25 @@ async def friends_page(
     sort_by: str = "display_name",
     sort_dir: str = "asc",
     db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
     if view == "table":
         rows = await friends_service.get_friend_table_rows(
-            db, sort_by=sort_by, sort_dir=sort_dir
+            db, user.id, sort_by=sort_by, sort_dir=sort_dir
         )
         return templates.TemplateResponse(
             request,
             "friends/table.html",
             {"rows": rows, "sort_by": sort_by, "sort_dir": sort_dir},
         )
-    sections = await _fetch_friend_sections(db)
+    sections = await _fetch_friend_sections(db, user.id)
     return templates.TemplateResponse(request, "friends/list.html", {"sections": sections})
 
 
 async def _build_friend_detail_context(
-    db: AsyncSession, cipher: SecretCipher, friend_id: int
+    db: AsyncSession, cipher: SecretCipher, user_id: int, friend_id: int
 ) -> dict[str, object] | None:
-    friend = await db.get(Friend, friend_id)
+    friend = await friends_service.get_friend(db, user_id, friend_id)
     if friend is None:
         return None
     pref = await db.get(FriendNotificationPref, friend_id)
@@ -140,13 +154,13 @@ async def _build_friend_detail_context(
             )
         )
     ).scalar_one()
-    groups = await _fetch_groups(db)
+    groups = await _fetch_groups(db, user_id)
     friend_group_ids = await _fetch_friend_group_ids(db, friend_id)
 
     # bio/アカウント作成日/会員ランク等はフレンド一覧の簡易オブジェクトに含まれないため、
     # モーダル表示のたびにVRChatから都度取得する（未連携/通信失敗時はNoneのまま続行）。
     live_profile = await friends_service.fetch_live_profile(
-        db, cipher, vrchat_user_id=friend.vrchat_user_id
+        db, cipher, user_id, vrchat_user_id=friend.vrchat_user_id
     )
     trust_rank = parse_trust_rank(live_profile.tags) if live_profile else None
     profile_image_url = (
@@ -174,9 +188,10 @@ async def friend_detail_modal(
     friend_id: int,
     db: AsyncSession = Depends(get_db),
     cipher: SecretCipher = Depends(get_cipher),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
     """フレンド一覧のカードクリックでモーダル表示するための、ナビ無しの断片。"""
-    context = await _build_friend_detail_context(db, cipher, friend_id)
+    context = await _build_friend_detail_context(db, cipher, user.id, friend_id)
     if context is None:
         return templates.TemplateResponse(
             request, "friends/_not_found_modal.html", status_code=404
@@ -190,8 +205,9 @@ async def friend_detail_page(
     friend_id: int,
     db: AsyncSession = Depends(get_db),
     cipher: SecretCipher = Depends(get_cipher),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    context = await _build_friend_detail_context(db, cipher, friend_id)
+    context = await _build_friend_detail_context(db, cipher, user.id, friend_id)
     if context is None:
         return templates.TemplateResponse(
             request, "friends/not_found.html", status_code=404
@@ -205,8 +221,9 @@ async def friend_tab_info(
     friend_id: int,
     db: AsyncSession = Depends(get_db),
     cipher: SecretCipher = Depends(get_cipher),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    context = await _build_friend_detail_context(db, cipher, friend_id)
+    context = await _build_friend_detail_context(db, cipher, user.id, friend_id)
     if context is None:
         return templates.TemplateResponse(
             request, "friends/_not_found_modal.html", status_code=404
@@ -220,14 +237,15 @@ async def friend_tab_groups(
     friend_id: int,
     db: AsyncSession = Depends(get_db),
     cipher: SecretCipher = Depends(get_cipher),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    friend = await db.get(Friend, friend_id)
+    friend = await friends_service.get_friend(db, user.id, friend_id)
     if friend is None:
         return templates.TemplateResponse(
             request, "friends/_not_found_modal.html", status_code=404
         )
     overview = await friends_service.fetch_groups_overview(
-        db, cipher, vrchat_user_id=friend.vrchat_user_id
+        db, cipher, user.id, vrchat_user_id=friend.vrchat_user_id
     )
     return templates.TemplateResponse(request, "friends/_tab_groups.html", {"overview": overview})
 
@@ -238,23 +256,27 @@ async def friend_tab_worlds(
     friend_id: int,
     db: AsyncSession = Depends(get_db),
     cipher: SecretCipher = Depends(get_cipher),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    friend = await db.get(Friend, friend_id)
+    friend = await friends_service.get_friend(db, user.id, friend_id)
     if friend is None:
         return templates.TemplateResponse(
             request, "friends/_not_found_modal.html", status_code=404
         )
     worlds = await friends_service.fetch_user_worlds(
-        db, cipher, vrchat_user_id=friend.vrchat_user_id
+        db, cipher, user.id, vrchat_user_id=friend.vrchat_user_id
     )
     return templates.TemplateResponse(request, "friends/_tab_worlds.html", {"worlds": worlds})
 
 
 @router.get("/{friend_id}/tab/activity", response_class=HTMLResponse)
 async def friend_tab_activity(
-    request: Request, friend_id: int, db: AsyncSession = Depends(get_db)
+    request: Request,
+    friend_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    friend = await db.get(Friend, friend_id)
+    friend = await friends_service.get_friend(db, user.id, friend_id)
     if friend is None:
         return templates.TemplateResponse(
             request, "friends/_not_found_modal.html", status_code=404
@@ -269,14 +291,15 @@ async def friend_tab_json(
     friend_id: int,
     db: AsyncSession = Depends(get_db),
     cipher: SecretCipher = Depends(get_cipher),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    friend = await db.get(Friend, friend_id)
+    friend = await friends_service.get_friend(db, user.id, friend_id)
     if friend is None:
         return templates.TemplateResponse(
             request, "friends/_not_found_modal.html", status_code=404
         )
     live_profile = await friends_service.fetch_live_profile(
-        db, cipher, vrchat_user_id=friend.vrchat_user_id
+        db, cipher, user.id, vrchat_user_id=friend.vrchat_user_id
     )
     friend_dict = {
         column.name: getattr(friend, column.name) for column in friend.__table__.columns
@@ -297,7 +320,10 @@ async def update_friend_notifications(
     notify_on_offline: bool = Form(False),
     notify_on_world_change: bool = Form(False),
     db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
+    if await friends_service.get_friend(db, user.id, friend_id) is None:
+        return HTMLResponse("", status_code=404)
     pref = await db.get(FriendNotificationPref, friend_id)
     if pref is None:
         pref = FriendNotificationPref(friend_id=friend_id)
@@ -310,43 +336,59 @@ async def update_friend_notifications(
 
 
 @router.get("/groups/manage", response_class=HTMLResponse)
-async def manage_groups_page(request: Request, db: AsyncSession = Depends(get_db)) -> HTMLResponse:
-    groups = await _fetch_groups(db)
+async def manage_groups_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
+) -> HTMLResponse:
+    groups = await _fetch_groups(db, user.id)
     return templates.TemplateResponse(request, "friends/groups.html", {"groups": groups})
 
 
 @router.post("/groups", response_class=HTMLResponse)
 async def create_local_group(
-    request: Request, name: str = Form(...), db: AsyncSession = Depends(get_db)
+    request: Request,
+    name: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    db.add(FriendGroup(name=name, source="local"))
+    db.add(FriendGroup(dashboard_user_id=user.id, name=name, source="local"))
     await db.commit()
-    groups = await _fetch_groups(db)
+    groups = await _fetch_groups(db, user.id)
     return templates.TemplateResponse(request, "friends/_groups_list.html", {"groups": groups})
 
 
 @router.delete("/groups/{group_id}", response_class=HTMLResponse)
 async def delete_local_group(
-    request: Request, group_id: int, db: AsyncSession = Depends(get_db)
+    request: Request,
+    group_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    group = await db.get(FriendGroup, group_id)
+    group = await _get_group(db, user.id, group_id)
     if group is not None and group.source == "local":
         await db.delete(group)
         await db.commit()
-    groups = await _fetch_groups(db)
+    groups = await _fetch_groups(db, user.id)
     return templates.TemplateResponse(request, "friends/_groups_list.html", {"groups": groups})
 
 
 @router.post("/{friend_id}/groups/{group_id}", response_class=HTMLResponse)
 async def add_friend_to_group(
-    request: Request, friend_id: int, group_id: int, db: AsyncSession = Depends(get_db)
+    request: Request,
+    friend_id: int,
+    group_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
+    friend = await friends_service.get_friend(db, user.id, friend_id)
+    if friend is None or await _get_group(db, user.id, group_id) is None:
+        return HTMLResponse("", status_code=404)
     existing = await db.get(FriendGroupMembership, (friend_id, group_id))
     if existing is None:
         db.add(FriendGroupMembership(friend_id=friend_id, group_id=group_id))
         await db.commit()
-    friend = await db.get(Friend, friend_id)
-    groups = await _fetch_groups(db)
+    groups = await _fetch_groups(db, user.id)
     friend_group_ids = await _fetch_friend_group_ids(db, friend_id)
     return templates.TemplateResponse(
         request,
@@ -357,14 +399,20 @@ async def add_friend_to_group(
 
 @router.delete("/{friend_id}/groups/{group_id}", response_class=HTMLResponse)
 async def remove_friend_from_group(
-    request: Request, friend_id: int, group_id: int, db: AsyncSession = Depends(get_db)
+    request: Request,
+    friend_id: int,
+    group_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
+    friend = await friends_service.get_friend(db, user.id, friend_id)
+    if friend is None:
+        return HTMLResponse("", status_code=404)
     membership = await db.get(FriendGroupMembership, (friend_id, group_id))
     if membership is not None:
         await db.delete(membership)
         await db.commit()
-    friend = await db.get(Friend, friend_id)
-    groups = await _fetch_groups(db)
+    groups = await _fetch_groups(db, user.id)
     friend_group_ids = await _fetch_friend_group_ids(db, friend_id)
     return templates.TemplateResponse(
         request,
@@ -378,24 +426,18 @@ async def manual_sync(
     request: Request,
     db: AsyncSession = Depends(get_db),
     cipher: SecretCipher = Depends(get_cipher),
+    user: DashboardUser = Depends(get_current_vrchat_user),
 ) -> HTMLResponse:
-    cookies = await vrchat_session_service.get_decrypted_cookies(db, cipher)
-    if cookies is None:
+    client = await vrchat_session_service.build_client(db, cipher, user.id)
+    if client is None:
         return templates.TemplateResponse(
             request,
             "friends/_sync_result.html",
             {"success": False, "message": "VRChatと連携していません。"},
         )
 
-    auth_cookie, two_factor_cookie = cookies
-    user_agent = await app_config_service.get_vrchat_user_agent(db)
-    client = VRChatClient(
-        user_agent=user_agent,
-        auth_cookie=auth_cookie,
-        two_factor_cookie=two_factor_cookie,
-    )
     try:
-        await vrchat_sync_service.full_friends_sync(db, client)
+        await vrchat_sync_service.full_friends_sync(db, user.id, client)
     except VRChatAPIError as exc:
         return templates.TemplateResponse(
             request,

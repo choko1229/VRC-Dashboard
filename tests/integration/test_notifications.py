@@ -2,32 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.deps import get_current_user
 from app.models.agent_command import AgentCommand
-from app.models.dashboard_user import DashboardUser
 from app.models.vrchat_notification import VRChatNotification
 from app.services import vrchat_notification_service as svc
+from tests.fakes import login_as
 
 
 def _log_in(fastapi_app: FastAPI) -> None:
-    async def fake_current_user() -> DashboardUser:
-        return DashboardUser(
-            id=1,
-            discord_user_id="123456789012345678",
-            discord_username="tester",
-            is_admin=False,
-            first_login_at=datetime.now(UTC),
-            last_login_at=datetime.now(UTC),
-        )
-
-    fastapi_app.dependency_overrides[get_current_user] = fake_current_user
+    login_as(fastapi_app, user_id=1)
 
 
 async def test_notifications_requires_login(client: AsyncClient) -> None:
@@ -44,6 +31,7 @@ async def test_notifications_page_renders_entries(
     async with db_session_factory() as db:
         await svc.ingest(
             db,
+            1,
             pipeline_event="notification",
             content={"id": "not_a", "type": "boop", "senderUsername": "Alice"},
         )
@@ -63,6 +51,7 @@ async def test_notifications_content_filters_by_type(
     async with db_session_factory() as db:
         await svc.ingest(
             db,
+            1,
             pipeline_event="notification",
             content={"id": "not_boop", "type": "boop", "senderUsername": "Bob"},
         )
@@ -82,6 +71,7 @@ async def test_accept_invite_notification_enqueues_agent_command(
     async with db_session_factory() as db:
         await svc.ingest(
             db,
+            1,
             pipeline_event="notification",
             content={
                 "id": "not_invite",
@@ -115,6 +105,7 @@ async def test_decline_notification_hides_row(
     async with db_session_factory() as db:
         await svc.ingest(
             db,
+            1,
             pipeline_event="notification",
             content={"id": "not_msg", "type": "message", "senderUsername": "Carol"},
         )
@@ -136,3 +127,38 @@ async def test_decline_notification_hides_row(
 
     list_response = await client.get("/notifications")
     assert "Carol" not in list_response.text
+
+
+async def test_other_users_notifications_are_isolated(
+    fastapi_app: FastAPI,
+    client: AsyncClient,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """複数人利用: 他ユーザーの通知は一覧に出ず、IDを直接指定しても操作できない（404）。"""
+    async with db_session_factory() as db:
+        await svc.ingest(
+            db,
+            1,
+            pipeline_event="notification",
+            content={"id": "not_user1", "type": "boop", "senderUsername": "Dave"},
+        )
+        notification_id = (
+            await db.execute(
+                select(VRChatNotification.id).where(
+                    VRChatNotification.vrchat_notification_id == "not_user1"
+                )
+            )
+        ).scalar_one()
+
+    login_as(fastapi_app, user_id=2)
+
+    list_response = await client.get("/notifications")
+    assert list_response.status_code == 200
+    assert "Dave" not in list_response.text
+
+    delete_response = await client.delete(f"/notifications/{notification_id}")
+    assert delete_response.status_code == 404
+    async with db_session_factory() as db:
+        row = await db.get(VRChatNotification, notification_id)
+        assert row is not None
+        assert row.is_hidden is False

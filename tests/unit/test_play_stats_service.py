@@ -117,12 +117,14 @@ async def test_get_all_friends_together_uses_game_log_co_presence(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        db.add(Friend(vrchat_user_id="usr_a", display_name="A"))
-        db.add(Friend(vrchat_user_id="usr_b", display_name="B"))
+        db.add(Friend(dashboard_user_id=1, vrchat_user_id="usr_a", display_name="A"))
+        db.add(Friend(dashboard_user_id=1, vrchat_user_id="usr_b", display_name="B"))
         await db.commit()
 
         instance = GameLogInstance(
-            location="wrld_a:1", joined_at=_dt(2026, 8, 1, 0, 0), left_at=_dt(2026, 8, 1, 1, 0)
+            dashboard_user_id=1,
+            location="wrld_a:1",
+            joined_at=_dt(2026, 8, 1, 0, 0), left_at=_dt(2026, 8, 1, 1, 0)
         )
         db.add(instance)
         await db.flush()
@@ -136,7 +138,7 @@ async def test_get_all_friends_together_uses_game_log_co_presence(
         )
         await db.commit()
 
-        results = await play_stats_service.get_all_friends_together(db)
+        results = await play_stats_service.get_all_friends_together(db, 1)
 
         assert [r.friend.vrchat_user_id for r in results] == ["usr_a"]
         assert results[0].join_count == 1
@@ -146,7 +148,7 @@ async def test_get_play_stats_page_returns_empty_state_without_error(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        page = await play_stats_service.get_play_stats_page(db)
+        page = await play_stats_service.get_play_stats_page(db, 1)
         assert page.summary.total_visits == 0
         assert page.daily
         assert page.top_worlds == []

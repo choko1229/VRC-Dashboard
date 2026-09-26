@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.services import device_auth_service
+from app.services import device_auth_service, game_log_agent_token_service
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +38,7 @@ async def test_approve_issues_a_token_and_poll_reflects_it(
 ) -> None:
     entry = device_auth_service.create_device_code()
     async with db_session_factory() as db:
-        approved = await device_auth_service.approve(db, entry.user_code, label="自宅PC")
+        approved = await device_auth_service.approve(db, entry.user_code, user_id=1, label="自宅PC")
     assert approved is True
 
     polled = device_auth_service.poll(entry.device_code)
@@ -46,12 +46,17 @@ async def test_approve_issues_a_token_and_poll_reflects_it(
     assert polled.status == "approved"
     assert polled.issued_token is not None
 
+    # 発行されたトークンは承認したユーザーの所有になる。
+    async with db_session_factory() as db:
+        owner = await game_log_agent_token_service.verify_token(db, polled.issued_token)
+    assert owner == 1
+
 
 async def test_approve_unknown_code_returns_false(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with db_session_factory() as db:
-        assert await device_auth_service.approve(db, "ZZZZ-ZZZZ") is False
+        assert await device_auth_service.approve(db, "ZZZZ-ZZZZ", user_id=1) is False
 
 
 def test_deny_marks_entry_denied() -> None:

@@ -32,6 +32,8 @@ async def upsert_subscription(
             )
         )
     else:
+        # 同じブラウザで別のDiscordアカウントにログインし直した場合は、通知の宛先も切り替える。
+        row.dashboard_user_id = dashboard_user_id
         row.p256dh_key = p256dh_key
         row.auth_key = auth_key
         row.user_agent = user_agent
@@ -45,6 +47,8 @@ async def delete_subscription(db: AsyncSession, endpoint: str) -> None:
     await db.commit()
 
 
-async def list_subscriptions(db: AsyncSession) -> list[WebPushSubscription]:
-    result = await db.execute(select(WebPushSubscription))
+async def list_subscriptions(db: AsyncSession, user_id: int) -> list[WebPushSubscription]:
+    result = await db.execute(
+        select(WebPushSubscription).where(WebPushSubscription.dashboard_user_id == user_id)
+    )
     return list(result.scalars().all())

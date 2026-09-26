@@ -3,15 +3,21 @@
 {% block content %}
 {% set current_user = current_dashboard_user(request) %}
 <h1 class="app-heading">VRChatアカウント連携</h1>
+<p class="text-muted">
+    このダッシュボードは複数人で利用できます。フレンド・アバター・通知などは、Discordアカウントごとに
+    連携したVRChatアカウントの情報が表示されるため、利用を始めるにはご自身のVRChatアカウントでログインしてください。
+    {% if current_user %}（現在のDiscordアカウント: {{ current_user.discord_global_name or current_user.discord_username }}）{% endif %}
+</p>
 <div id="vrchat-panel">
     {% include "settings/_vrchat_panel.html" %}
 </div>
 <p>
-    <a href="/settings/general">全般設定</a> ｜
     <a href="/settings/notifications">通知設定</a> ｜
     {% if current_user and current_user.is_admin %}
+    <a href="/settings/general">全般設定</a> ｜
     <a href="/settings/allowlist">ユーザー管理</a> ｜
     {% endif %}
-    <a href="/">ダッシュボードへ戻る</a>
+    {# 未連携の間はダッシュボードを開いてもこの画面へ戻されるため、連携済みの場合のみ表示する。 #}
+    {% if mode == "connected" %}<a href="/">ダッシュボードへ戻る</a>{% endif %}
 </p>
 {% endblock %}

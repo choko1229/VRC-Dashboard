@@ -12,11 +12,18 @@ _DISCORD_BOT_URL_KEY = "discord_notify_bot_url"
 _DISCORD_SHARED_SECRET_KEY = "discord_notify_shared_secret_encrypted"
 
 
-async def build_discord_sender(db: AsyncSession, cipher: SecretCipher) -> DiscordNotifySender:
+async def build_discord_sender(
+    db: AsyncSession, cipher: SecretCipher, *, recipient_discord_user_id: str | None = None
+) -> DiscordNotifySender:
+    """BOTの接続先は管理者が設定する全体共通の設定。通知の宛先はダッシュボードユーザーごとに指定する。"""
     bot_url = await app_setting_service.get_setting(db, _DISCORD_BOT_URL_KEY) or ""
     encrypted_secret = await app_setting_service.get_setting(db, _DISCORD_SHARED_SECRET_KEY)
     shared_secret = cipher.decrypt(encrypted_secret) if encrypted_secret else ""
-    return DiscordNotifySender(bot_url=bot_url, shared_secret=shared_secret)
+    return DiscordNotifySender(
+        bot_url=bot_url,
+        shared_secret=shared_secret,
+        recipient_discord_user_id=recipient_discord_user_id,
+    )
 
 
 async def get_discord_notify_config(
